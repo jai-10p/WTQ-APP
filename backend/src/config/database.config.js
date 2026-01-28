@@ -15,6 +15,12 @@ const sequelize = new Sequelize(
         host: config.database.host,
         port: config.database.port,
         dialect: config.database.dialect,
+        dialectOptions: {
+            ssl: config.database.ssl ? {
+                require: true,
+                rejectUnauthorized: false
+            } : false
+        },
         pool: config.database.pool,
         logging: config.database.logging,
         define: {

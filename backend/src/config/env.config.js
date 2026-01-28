@@ -19,6 +19,7 @@ const config = {
         username: process.env.DB_USER || 'root',
         password: process.env.DB_PASSWORD || '',
         dialect: process.env.DB_DIALECT || 'mysql',
+        ssl: process.env.DB_SSL_MODE === 'REQUIRED' || process.env.DB_SSL_MODE === 'true',
         pool: {
             max: parseInt(process.env.DB_POOL_MAX, 10) || 5,
             min: parseInt(process.env.DB_POOL_MIN, 10) || 0,

@@ -12,14 +12,6 @@ const Question = sequelize.define('questions', {
         primaryKey: true,
         autoIncrement: true,
     },
-    category_id: {
-        type: DataTypes.INTEGER.UNSIGNED,
-        allowNull: true, // Categories are being removed
-        references: {
-            model: 'categories',
-            key: 'id',
-        },
-    },
     question_text: {
         type: DataTypes.TEXT,
         allowNull: false,
@@ -64,9 +56,6 @@ const Question = sequelize.define('questions', {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     indexes: [
-        {
-            fields: ['category_id'],
-        },
         {
             fields: ['difficulty'],
         },

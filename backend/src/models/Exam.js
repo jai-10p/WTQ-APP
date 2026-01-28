@@ -24,14 +24,6 @@ const Exam = sequelize.define('exams', {
         type: DataTypes.TEXT,
         allowNull: true,
     },
-    category_id: {
-        type: DataTypes.INTEGER.UNSIGNED,
-        allowNull: true, // Changed to true - categories are no longer required
-        references: {
-            model: 'categories',
-            key: 'id',
-        },
-    },
     scheduled_start: {
         type: DataTypes.DATE,
         allowNull: false,
@@ -92,9 +84,6 @@ const Exam = sequelize.define('exams', {
     createdAt: 'created_at',
     updatedAt: 'updated_at',
     indexes: [
-        {
-            fields: ['category_id'],
-        },
         {
             fields: ['scheduled_start', 'scheduled_end'],
         },
