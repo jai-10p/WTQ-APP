@@ -47,11 +47,32 @@ const getAvailableExams = async (req, res, next) => {
             }
         }
 
-        const { count, rows: exams } = await Exam.findAndCountAll({
+        const { count, rows: rawExams } = await Exam.findAndCountAll({
             where: whereClause,
+            include: [{
+                model: ExamAttempt,
+                as: 'attempts',
+                where: { student_id: req.user.id },
+                required: false,
+                attributes: ['id', 'status'],
+            }],
             limit: parseInt(limit),
             offset: parseInt(offset),
-            order: [['created_at', 'DESC']],
+            order: [
+                ['created_at', 'DESC'],
+                [{ model: ExamAttempt, as: 'attempts' }, 'started_at', 'DESC']
+            ],
+        });
+
+        // Map attempt status back to simple form for frontend
+        const exams = rawExams.map(exam => {
+            const latestAttempt = exam.attempts && exam.attempts.length > 0 ? exam.attempts[0] : null;
+            const plainExam = exam.get({ plain: true });
+            delete plainExam.attempts;
+            return {
+                ...plainExam,
+                attempt_status: latestAttempt ? latestAttempt.status : null
+            };
         });
 
         return ApiResponse.success(res, {

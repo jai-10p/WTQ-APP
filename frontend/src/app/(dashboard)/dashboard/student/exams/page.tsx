@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Calendar, Clock, Play, Loader2, Search, Filter } from 'lucide-react';
+import { BookOpen, Calendar, Clock, Play, Loader2, Search, Filter, CheckCircle2 } from 'lucide-react';
 import api from '@/services/api';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/context/ToastContext';
@@ -110,22 +110,74 @@ export default function StudentExamsPage() {
                                         <Clock className="w-4 h-4 text-gray-400" />
                                         <span>Duration: {exam.duration_minutes} Minutes</span>
                                     </div>
+                                    {exam.attempt_status === 'submitted' && (
+                                        <div className="flex items-center gap-3 text-sm font-bold text-green-600 bg-green-50 px-3 py-1.5 rounded-lg border border-green-100">
+                                            <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                                            Exam Submitted
+                                        </div>
+                                    )}
                                 </div>
 
-                                <button
-                                    onClick={() => handleStartExam(exam.id)}
-                                    disabled={startingId === exam.id}
-                                    className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-3 rounded-xl transition-colors shadow-sm"
-                                >
-                                    {startingId === exam.id ? (
-                                        <Loader2 className="w-5 h-5 animate-spin" />
-                                    ) : (
-                                        <>
-                                            <Play className="w-4 h-4 fill-current" />
-                                            Start Attempt
-                                        </>
-                                    )}
-                                </button>
+                                {(() => {
+                                    const now = new Date();
+                                    const startTime = new Date(exam.scheduled_start);
+                                    const endTime = new Date(exam.scheduled_end);
+                                    const isNotStarted = now < startTime;
+                                    const isEnded = now > endTime;
+
+                                    if (exam.attempt_status === 'submitted') {
+                                        return (
+                                            <button
+                                                disabled
+                                                className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-400 font-bold py-3 rounded-xl cursor-not-allowed border border-gray-200"
+                                            >
+                                                <CheckCircle2 className="w-4 h-4" />
+                                                Completed
+                                            </button>
+                                        );
+                                    }
+
+                                    if (isEnded) {
+                                        return (
+                                            <button
+                                                disabled
+                                                className="w-full flex items-center justify-center gap-2 bg-red-50 text-red-400 font-bold py-3 rounded-xl cursor-not-allowed border border-red-100"
+                                            >
+                                                <Clock className="w-4 h-4" />
+                                                Exam Ended
+                                            </button>
+                                        );
+                                    }
+
+                                    if (isNotStarted) {
+                                        return (
+                                            <button
+                                                disabled
+                                                className="w-full flex items-center justify-center gap-2 bg-amber-50 text-amber-500 font-bold py-3 rounded-xl cursor-not-allowed border border-amber-100"
+                                            >
+                                                <Calendar className="w-4 h-4" />
+                                                Not Started
+                                            </button>
+                                        );
+                                    }
+
+                                    return (
+                                        <button
+                                            onClick={() => handleStartExam(exam.id)}
+                                            disabled={startingId === exam.id}
+                                            className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-3 rounded-xl transition-colors shadow-sm"
+                                        >
+                                            {startingId === exam.id ? (
+                                                <Loader2 className="w-5 h-5 animate-spin" />
+                                            ) : (
+                                                <>
+                                                    <Play className="w-4 h-4 fill-current" />
+                                                    {exam.attempt_status === 'in_progress' ? 'Resume Attempt' : 'Start Attempt'}
+                                                </>
+                                            )}
+                                        </button>
+                                    );
+                                })()}
                             </div>
                         </div>
                     ))

@@ -49,6 +49,8 @@ export default function ExamsPage() {
         try {
             const payload = {
                 ...formData,
+                scheduled_start: new Date(formData.scheduled_start).toISOString(),
+                scheduled_end: new Date(formData.scheduled_end).toISOString(),
                 allowed_designations: formData.allowed_designations.length > 0 ? formData.allowed_designations : null
             };
 
@@ -93,11 +95,17 @@ export default function ExamsPage() {
             console.error("Error parsing designations", e);
         }
 
+        const toLocalDatetime = (dateStr: string) => {
+            const date = new Date(dateStr);
+            const offset = date.getTimezoneOffset() * 60000;
+            return new Date(date.getTime() - offset).toISOString().slice(0, 16);
+        };
+
         setFormData({
             exam_title: exam.exam_title,
             description: exam.description || '',
-            scheduled_start: new Date(exam.scheduled_start).toISOString().slice(0, 16),
-            scheduled_end: new Date(exam.scheduled_end).toISOString().slice(0, 16),
+            scheduled_start: toLocalDatetime(exam.scheduled_start),
+            scheduled_end: toLocalDatetime(exam.scheduled_end),
             duration_minutes: exam.duration_minutes,
             passing_score: exam.passing_score,
             allowed_designations: designations || [],
