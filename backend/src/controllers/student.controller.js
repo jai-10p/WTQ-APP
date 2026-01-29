@@ -167,7 +167,8 @@ const getAttemptQuestions = async (req, res, next) => {
                         model: MCQOption,
                         as: 'options',
                         attributes: ['id', 'option_text', 'display_order']
-                    }]
+                    }],
+                    attributes: ['id', 'question_text', 'image_url', 'question_type', 'database_schema']
                 }]
             }],
         });
@@ -180,22 +181,29 @@ const getAttemptQuestions = async (req, res, next) => {
             return ApiResponse.error(res, 'Linked exam not found', 404);
         }
 
-        // Standardize the response to match what the frontend expects.
-        // The frontend expects questions to be an array of objects where each object 
-        // has the junction attributes at the top level (id, question_weightage, etc.) 
-        // and the Question data in a 'question' property.
+        // Fetch existing answers for this attempt
+        const answers = await StudentAnswer.findAll({
+            where: { attempt_id: attemptId }
+        });
 
         const formattedQuestions = attempt.exam.questions.map(q => {
             const junction = q.exam_question_link;
+            const answer = answers.find(a => a.exam_question_id === junction.id);
             return {
                 id: junction.id, // junction ID
                 question_id: q.id,
                 question_order: junction.question_order,
                 question_weightage: parseFloat(junction.question_weightage),
+                answer: answer ? {
+                    selected_option_id: answer.selected_option_id,
+                    answer_text: answer.answer_text
+                } : null,
                 question: {
                     id: q.id,
                     question_text: q.question_text,
                     image_url: q.image_url,
+                    question_type: q.question_type,
+                    database_schema: q.database_schema,
                     options: q.options
                 }
             };
@@ -285,14 +293,16 @@ const submitAnswer = async (req, res, next) => {
 
         if (existingAnswer) {
             await existingAnswer.update({
-                selected_option_id,
+                selected_option_id: selected_option_id || null,
+                answer_text: req.body.answer_text || null,
                 answered_at: new Date()
             });
         } else {
             await StudentAnswer.create({
                 attempt_id: attempt.id,
                 exam_question_id: exam_question_id,
-                selected_option_id
+                selected_option_id: selected_option_id || null,
+                answer_text: req.body.answer_text || null
             });
         }
 
@@ -345,7 +355,12 @@ const submitExam = async (req, res, next) => {
                 {
                     model: ExamQuestion,
                     as: 'exam_question',
-                    attributes: ['question_weightage']
+                    attributes: ['question_weightage'],
+                    include: [{
+                        model: Question,
+                        as: 'question',
+                        attributes: ['question_type', 'reference_solution', 'database_schema']
+                    }]
                 },
                 {
                     model: MCQOption,
@@ -369,12 +384,29 @@ const submitExam = async (req, res, next) => {
         let totalScore = 0;
         let correctCount = 0;
 
-        answers.forEach(ans => {
-            if (ans.selected_option.is_correct) {
-                totalScore += parseFloat(ans.exam_question.question_weightage);
-                correctCount++;
+        for (const ans of answers) {
+            const question = ans.exam_question.question;
+            const weightage = parseFloat(ans.exam_question.question_weightage);
+
+            if (question.question_type === 'mcq') {
+                if (ans.selected_option && ans.selected_option.is_correct) {
+                    totalScore += weightage;
+                    correctCount++;
+                }
+            } else if (question.question_type === 'sql') {
+                if (ans.answer_text) {
+                    const isCorrect = await evaluateSQLAnswer(
+                        ans.answer_text,
+                        question.reference_solution,
+                        question.database_schema
+                    );
+                    if (isCorrect) {
+                        totalScore += weightage;
+                        correctCount++;
+                    }
+                }
             }
-        });
+        }
 
         const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
         const isPassed = percentage >= attempt.exam.passing_score;
@@ -414,9 +446,16 @@ const getExamResult = async (req, res, next) => {
     try {
         const { attemptId } = req.params;
         const studentId = req.user.id;
+        const userRole = req.user.role;
+
+        // Configuration for where clause: students can only see their own, admins/invigilators can see all 
+        const whereClause = { id: attemptId };
+        if (userRole === 'student') {
+            whereClause.student_id = studentId;
+        }
 
         const attempt = await ExamAttempt.findOne({
-            where: { id: attemptId, student_id: studentId },
+            where: whereClause,
             include: [{ model: ExamResult, as: 'result' }]
         });
 
@@ -446,7 +485,7 @@ const getResultBreakdown = async (attemptId, transaction = null) => {
                 include: [{
                     model: Question,
                     as: 'question',
-                    attributes: ['question_text']
+                    attributes: ['question_text', 'question_type', 'reference_solution', 'database_schema']
                 }]
             },
             {
@@ -458,15 +497,40 @@ const getResultBreakdown = async (attemptId, transaction = null) => {
         transaction
     });
 
-    return answers.map(ans => ({
-        question_id: ans.exam_question.question_id,
-        exam_question_id: ans.exam_question_id,
-        question_text: ans.exam_question.question.question_text,
-        selected_option: ans.selected_option ? ans.selected_option.option_text : 'Not Answered',
-        is_correct: ans.selected_option ? ans.selected_option.is_correct : false,
-        weightage: parseFloat(ans.exam_question.question_weightage),
-        score: (ans.selected_option && ans.selected_option.is_correct) ? parseFloat(ans.exam_question.question_weightage) : 0
-    }));
+    const breakdown = [];
+    for (const ans of answers) {
+        const question = ans.exam_question.question;
+        const weightage = parseFloat(ans.exam_question.question_weightage);
+        let isCorrect = false;
+        let displayAnswer = 'Not Answered';
+
+        if (question.question_type === 'mcq') {
+            displayAnswer = ans.selected_option ? ans.selected_option.option_text : 'Not Answered';
+            isCorrect = ans.selected_option ? ans.selected_option.is_correct : false;
+        } else if (question.question_type === 'sql') {
+            displayAnswer = ans.answer_text || 'Not Answered';
+            if (ans.answer_text) {
+                isCorrect = await evaluateSQLAnswer(
+                    ans.answer_text,
+                    question.reference_solution,
+                    question.database_schema
+                );
+            }
+        }
+
+        breakdown.push({
+            question_id: question.id,
+            exam_question_id: ans.exam_question_id,
+            question_text: question.question_text,
+            question_type: question.question_type,
+            selected_option: displayAnswer,
+            is_correct: isCorrect,
+            weightage: weightage,
+            score: isCorrect ? weightage : 0
+        });
+    }
+
+    return breakdown;
 };
 
 // Helper: Check if time expired
@@ -526,6 +590,35 @@ const getMyResults = async (req, res, next) => {
         });
     } catch (error) {
         next(error);
+    }
+};
+
+// Helper: Evaluate SQL Answer
+const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
+    try {
+        const transaction = await sequelize.transaction();
+        try {
+            if (schema) {
+                // SANDBOX TRICK: Convert all CREATE TABLE to CREATE TEMPORARY TABLE
+                const sandboxSchema = schema.replace(/\bCREATE\s+(?:TEMPORARY\s+)?TABLE\b/gi, 'CREATE TEMPORARY TABLE');
+                const statements = sandboxSchema.split(';').filter(s => s.trim());
+                for (const s of statements) await sequelize.query(s, { transaction });
+            }
+
+            const [studentResults] = await sequelize.query(studentSQL, { transaction });
+            const [referenceResults] = await sequelize.query(referenceSQL, { transaction });
+
+            await transaction.rollback();
+
+            // Compare results (JSON stringify is a simple way to compare row sets)
+            return JSON.stringify(studentResults) === JSON.stringify(referenceResults);
+        } catch (e) {
+            console.error('SQL Grading Error:', e);
+            if (transaction) await transaction.rollback();
+            return false;
+        }
+    } catch (e) {
+        return false;
     }
 };
 

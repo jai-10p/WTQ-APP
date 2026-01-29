@@ -14,6 +14,10 @@ const createQuestionValidator = [
         .trim()
         .notEmpty()
         .withMessage('Question text is required'),
+    body('question_type')
+        .optional()
+        .isIn(['mcq', 'sql'])
+        .withMessage('Question type must be mcq or sql'),
     body('image_url')
         .optional()
         .trim()
@@ -27,14 +31,25 @@ const createQuestionValidator = [
         .optional()
         .isFloat({ min: 0.01 })
         .withMessage('Weightage must be greater than 0'),
+    body('reference_solution')
+        .if(body('question_type').equals('sql'))
+        .trim()
+        .notEmpty()
+        .withMessage('Reference solution is required for SQL questions'),
+    body('database_schema')
+        .optional()
+        .trim(),
     body('options')
+        .if(body('question_type').not().equals('sql'))
         .isArray({ min: 2 })
-        .withMessage('At least 2 options are required'),
+        .withMessage('At least 2 options are required for MCQ questions'),
     body('options.*.option_text')
+        .if(body('question_type').not().equals('sql'))
         .trim()
         .notEmpty()
         .withMessage('Option text is required'),
     body('options.*.is_correct')
+        .if(body('question_type').not().equals('sql'))
         .isBoolean()
         .withMessage('is_correct must be a boolean'),
     body('options.*.display_order')
@@ -53,6 +68,10 @@ const updateQuestionValidator = [
         .trim()
         .notEmpty()
         .withMessage('Question text cannot be empty'),
+    body('question_type')
+        .optional()
+        .isIn(['mcq', 'sql'])
+        .withMessage('Question type must be mcq or sql'),
     body('image_url')
         .optional()
         .trim()
@@ -77,6 +96,12 @@ const updateQuestionValidator = [
         .optional()
         .isBoolean()
         .withMessage('is_active must be a boolean'),
+    body('reference_solution')
+        .optional()
+        .trim(),
+    body('database_schema')
+        .optional()
+        .trim(),
 ];
 
 const optionValidator = [

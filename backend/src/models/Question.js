@@ -46,6 +46,21 @@ const Question = sequelize.define('questions', {
             key: 'id',
         },
     },
+    question_type: {
+        type: DataTypes.ENUM('mcq', 'sql'),
+        allowNull: false,
+        defaultValue: 'mcq'
+    },
+    reference_solution: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'The correct SQL query for SQL type questions'
+    },
+    database_schema: {
+        type: DataTypes.TEXT,
+        allowNull: true,
+        comment: 'SQL to setup the database environment for this question'
+    },
     is_active: {
         type: DataTypes.BOOLEAN,
         allowNull: false,

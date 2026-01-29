@@ -25,6 +25,7 @@ const errorHandler = (err, req, res, next) => {
 
     // Sequelize validation errors
     if (err.name === 'SequelizeValidationError') {
+        console.error('Sequelize Validation Error Details:', JSON.stringify(err.errors, null, 2));
         statusCode = 422;
         message = 'Validation Error';
         const errors = err.errors.map((e) => ({

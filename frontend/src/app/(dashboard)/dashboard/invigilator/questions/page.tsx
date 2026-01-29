@@ -15,11 +15,13 @@ export default function QuestionsPage() {
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState<any>(null);
 
-    // Form state
     const [formData, setFormData] = useState({
         question_text: '',
         difficulty: 'medium',
         weightage: 1,
+        question_type: 'mcq',
+        reference_solution: '',
+        database_schema: '',
         options: [
             { option_text: '', is_correct: true, display_order: 1 },
             { option_text: '', is_correct: false, display_order: 2 },
@@ -58,8 +60,13 @@ export default function QuestionsPage() {
         e.preventDefault();
 
         // Basic validation
-        if (formData.options.some(opt => !opt.option_text.trim())) {
+        if (formData.question_type === 'mcq' && formData.options.some(opt => !opt.option_text.trim())) {
             showToast('Please fill in all option texts', 'warning');
+            return;
+        }
+
+        if (formData.question_type === 'sql' && !formData.reference_solution.trim()) {
+            showToast('Please provide a reference solution', 'warning');
             return;
         }
 
@@ -85,6 +92,9 @@ export default function QuestionsPage() {
             question_text: '',
             difficulty: 'medium',
             weightage: 1,
+            question_type: 'mcq',
+            reference_solution: '',
+            database_schema: '',
             options: [
                 { option_text: '', is_correct: true, display_order: 1 },
                 { option_text: '', is_correct: false, display_order: 2 },
@@ -100,11 +110,19 @@ export default function QuestionsPage() {
             question_text: q.question_text,
             difficulty: q.difficulty,
             weightage: q.weightage,
-            options: q.options.map((opt: any) => ({
+            question_type: q.question_type || 'mcq',
+            reference_solution: q.reference_solution || '',
+            database_schema: q.database_schema || '',
+            options: q.options?.map((opt: any) => ({
                 option_text: opt.option_text,
                 is_correct: opt.is_correct,
                 display_order: opt.display_order
-            }))
+            })) || [
+                    { option_text: '', is_correct: true, display_order: 1 },
+                    { option_text: '', is_correct: false, display_order: 2 },
+                    { option_text: '', is_correct: false, display_order: 3 },
+                    { option_text: '', is_correct: false, display_order: 4 },
+                ]
         });
         setIsModalOpen(true);
     };
@@ -206,16 +224,25 @@ export default function QuestionsPage() {
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            <div className="flex gap-1">
-                                                {q.options?.map((opt: any) => (
-                                                    <div
-                                                        key={opt.id}
-                                                        title={opt.option_text}
-                                                        className={`w-2 h-2 rounded-full ${opt.is_correct ? 'bg-green-500' : 'bg-gray-300'}`}
-                                                    />
-                                                ))}
-                                            </div>
-                                            <p className="text-[10px] text-gray-400 mt-1">{q.options?.length} Options</p>
+                                            {q.question_type === 'sql' ? (
+                                                <div className="flex items-center gap-2 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded w-fit">
+                                                    <Loader2 className="w-3 h-3" />
+                                                    SQL Query
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <div className="flex gap-1">
+                                                        {q.options?.map((opt: any) => (
+                                                            <div
+                                                                key={opt.id}
+                                                                title={opt.option_text}
+                                                                className={`w-2 h-2 rounded-full ${opt.is_correct ? 'bg-green-500' : 'bg-gray-300'}`}
+                                                            />
+                                                        ))}
+                                                    </div>
+                                                    <p className="text-[10px] text-gray-400 mt-1">{q.options?.length} Options</p>
+                                                </>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex items-center justify-end gap-2">
@@ -284,6 +311,29 @@ export default function QuestionsPage() {
                                             }}
                                         />
                                     </div>
+                                    <div className="col-span-2">
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Question Type</label>
+                                        <div className="flex gap-4">
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    checked={formData.question_type === 'mcq'}
+                                                    onChange={() => setFormData({ ...formData, question_type: 'mcq' })}
+                                                    className="w-4 h-4 text-blue-600"
+                                                />
+                                                <span className="text-sm">Multiple Choice</span>
+                                            </label>
+                                            <label className="flex items-center gap-2 cursor-pointer">
+                                                <input
+                                                    type="radio"
+                                                    checked={formData.question_type === 'sql'}
+                                                    onChange={() => setFormData({ ...formData, question_type: 'sql' })}
+                                                    className="w-4 h-4 text-blue-600"
+                                                />
+                                                <span className="text-sm">SQL Query</span>
+                                            </label>
+                                        </div>
+                                    </div>
                                 </div>
                             </div>
 
@@ -298,33 +348,59 @@ export default function QuestionsPage() {
                                 />
                             </div>
 
-                            <div className="space-y-4">
-                                <label className="block text-sm font-medium text-gray-700">Options (Mark the correct answer)</label>
-                                {formData.options.map((opt, index) => (
-                                    <div key={index} className="flex items-center gap-3">
-                                        <input
-                                            type="radio"
-                                            name="correct_option"
-                                            checked={opt.is_correct}
-                                            onChange={() => handleOptionChange(index, 'is_correct', true)}
-                                            className="w-4 h-4 text-blue-600"
-                                        />
-                                        <input
-                                            type="text"
+                            {formData.question_type === 'mcq' ? (
+                                <div className="space-y-4">
+                                    <label className="block text-sm font-medium text-gray-700">Options (Mark the correct answer)</label>
+                                    {formData.options.map((opt, index) => (
+                                        <div key={index} className="flex items-center gap-3">
+                                            <input
+                                                type="radio"
+                                                name="correct_option"
+                                                checked={opt.is_correct}
+                                                onChange={() => handleOptionChange(index, 'is_correct', true)}
+                                                className="w-4 h-4 text-blue-600"
+                                            />
+                                            <input
+                                                type="text"
+                                                required
+                                                placeholder={`Option ${index + 1}`}
+                                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 outline-none"
+                                                value={opt.option_text}
+                                                onChange={(e) => handleOptionChange(index, 'option_text', e.target.value)}
+                                            />
+                                            {opt.is_correct ? (
+                                                <CheckCircle2 className="w-5 h-5 text-green-500" />
+                                            ) : (
+                                                <XCircle className="w-5 h-5 text-gray-300" />
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Database Schema (Initial SQL)</label>
+                                        <p className="text-xs text-gray-500 mb-2">Provide CREATE TABLE and INSERT statements to setup the environment for this question.</p>
+                                        <textarea
                                             required
-                                            placeholder={`Option ${index + 1}`}
-                                            className="flex-1 border border-gray-200 rounded-lg px-3 py-2 outline-none"
-                                            value={opt.option_text}
-                                            onChange={(e) => handleOptionChange(index, 'option_text', e.target.value)}
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[120px]"
+                                            placeholder="CREATE TABLE City (ID INT, Name VARCHAR(20)...); INSERT INTO City VALUES (1, 'New York'...);"
+                                            value={formData.database_schema}
+                                            onChange={(e) => setFormData({ ...formData, database_schema: e.target.value })}
                                         />
-                                        {opt.is_correct ? (
-                                            <CheckCircle2 className="w-5 h-5 text-green-500" />
-                                        ) : (
-                                            <XCircle className="w-5 h-5 text-gray-300" />
-                                        )}
                                     </div>
-                                ))}
-                            </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Reference Solution (Correct SQL Query)</label>
+                                        <textarea
+                                            required
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px]"
+                                            placeholder="SELECT * FROM City WHERE Population > 100000;"
+                                            value={formData.reference_solution}
+                                            onChange={(e) => setFormData({ ...formData, reference_solution: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            )}
 
                             <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
                                 <button

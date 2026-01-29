@@ -31,11 +31,16 @@ const StudentAnswer = sequelize.define('student_answers', {
     },
     selected_option_id: {
         type: DataTypes.BIGINT.UNSIGNED,
-        allowNull: false,
+        allowNull: true, // Null for SQL questions
         references: {
             model: 'mcq_options',
             key: 'id',
         },
+    },
+    answer_text: {
+        type: DataTypes.TEXT,
+        allowNull: true, // For SQL questions
+        comment: 'Stores the SQL query written by the student'
     },
     answered_at: {
         type: DataTypes.DATE,

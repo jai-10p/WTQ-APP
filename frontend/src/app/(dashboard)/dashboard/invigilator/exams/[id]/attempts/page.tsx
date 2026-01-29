@@ -132,12 +132,13 @@ export default function ExamAttemptsPage() {
                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Score</th>
                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
                                 <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Attempt Date</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filteredAttempts.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-12 text-center text-gray-500">
+                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
                                         <div className="flex flex-col items-center justify-center">
                                             <UserCheck className="w-12 h-12 text-gray-200 mb-3" />
                                             <p>No attempts found for this exam.</p>
@@ -204,6 +205,14 @@ export default function ExamAttemptsPage() {
                                                     {new Date(attempt.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
                                             </div>
+                                        </td>
+                                        <td className="px-6 py-4 text-right">
+                                            <Link
+                                                href={`/dashboard/student/results/${attempt.id}`}
+                                                className="inline-flex items-center gap-2 text-xs font-bold text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-all"
+                                            >
+                                                View Report
+                                            </Link>
                                         </td>
                                     </tr>
                                 ))

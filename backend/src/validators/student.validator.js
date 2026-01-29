@@ -33,8 +33,12 @@ const submitAnswerValidator = [
             return true;
         }),
     body('selected_option_id')
+        .optional({ nullable: true })
         .isInt({ min: 1 })
         .withMessage('Invalid option ID'),
+    body('answer_text')
+        .optional({ nullable: true })
+        .trim(),
 ];
 
 module.exports = {

@@ -14,14 +14,18 @@ import {
 } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/context/ToastContext';
+import { useAuth } from '@/context/AuthContext';
 
 export default function ResultDetailPage() {
     const params = useParams();
     const attemptId = params.id;
     const router = useRouter();
     const { showToast } = useToast();
+    const { user } = useAuth();
     const [result, setResult] = useState<any>(null);
     const [loading, setLoading] = useState(true);
+
+    const isInvigilator = user?.role === 'invigilator' || user?.role === 'admin';
 
     useEffect(() => {
         if (attemptId) {
@@ -37,7 +41,7 @@ export default function ResultDetailPage() {
         } catch (error) {
             console.error('Failed to fetch result:', error);
             showToast('Failed to load exam results.', 'error');
-            router.push('/dashboard/student/results');
+            router.push('/dashboard');
         } finally {
             setLoading(false);
         }
@@ -56,7 +60,7 @@ export default function ResultDetailPage() {
         <div className="max-w-4xl mx-auto space-y-8">
             <div className="flex items-center gap-4">
                 <button
-                    onClick={() => router.push('/dashboard/student/results')}
+                    onClick={() => window.history.length > 1 ? window.history.back() : router.push('/dashboard')}
                     className="p-2 hover:bg-white rounded-lg transition-colors border border-transparent hover:border-gray-200"
                 >
                     <ChevronLeft className="w-5 h-5 text-gray-600" />
@@ -128,16 +132,25 @@ export default function ResultDetailPage() {
                                 </div>
 
                                 <div className="space-y-2">
-                                    <div className={`p-3 rounded-xl border flex items-center justify-between ${item.is_correct
+                                    <div className={`p-3 rounded-xl border ${item.is_correct
                                         ? 'bg-green-50/50 border-green-200'
                                         : 'bg-red-50/50 border-red-200'
                                         }`}>
-                                        <div className="flex items-center gap-3">
+                                        <div className="flex items-center gap-3 mb-2">
                                             {item.is_correct ? <CheckCircle2 className="w-4 h-4 text-green-600" /> : <XCircle className="w-4 h-4 text-red-600" />}
-                                            <span className={`text-sm font-medium ${item.is_correct ? 'text-green-800' : 'text-red-800'}`}>
-                                                Your Answer: <span className="font-bold">{item.selected_option}</span>
+                                            <span className={`text-sm font-semibold ${item.is_correct ? 'text-green-800' : 'text-red-800'}`}>
+                                                Your Answer:
                                             </span>
                                         </div>
+                                        {item.question_type === 'sql' ? (
+                                            <div className="mt-2 font-mono text-xs p-3 bg-gray-900 text-green-400 rounded-lg overflow-x-auto whitespace-pre">
+                                                {item.selected_option}
+                                            </div>
+                                        ) : (
+                                            <span className={`text-sm font-bold ml-7 ${item.is_correct ? 'text-green-900' : 'text-red-900'}`}>
+                                                {item.selected_option}
+                                            </span>
+                                        )}
                                     </div>
                                     {!item.is_correct && (
                                         <p className="text-xs text-blue-600 font-semibold bg-blue-50 px-3 py-1.5 rounded-lg inline-block">
@@ -153,10 +166,10 @@ export default function ResultDetailPage() {
 
             <div className="flex justify-center pt-8">
                 <button
-                    onClick={() => router.push('/dashboard/student/exams')}
+                    onClick={() => isInvigilator ? window.history.back() : router.push('/dashboard/student/exams')}
                     className="bg-blue-600 hover:bg-blue-700 text-white px-8 py-3 rounded-xl font-black shadow-lg transition-all hover:scale-105 active:scale-95"
                 >
-                    Back to Available Exams
+                    {isInvigilator ? 'Back to Exam Results' : 'Back to Available Exams'}
                 </button>
             </div>
         </div>

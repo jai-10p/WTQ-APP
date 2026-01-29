@@ -40,12 +40,14 @@ const createQuestion = async (req, res, next) => {
         // Create question
         const question = await Question.create(
             {
-                category_id,
                 question_text,
                 image_url,
                 difficulty: difficulty || 'medium',
                 weightage: weightage || 1.0,
                 created_by: req.user.id,
+                question_type: req.body.question_type || 'mcq',
+                reference_solution: req.body.reference_solution,
+                database_schema: req.body.database_schema,
             },
             { transaction }
         );
@@ -223,12 +225,14 @@ const updateQuestion = async (req, res, next) => {
         }
 
         await question.update({
-            category_id,
             question_text,
             image_url,
             difficulty,
             weightage,
-            is_active
+            is_active,
+            question_type: req.body.question_type,
+            reference_solution: req.body.reference_solution,
+            database_schema: req.body.database_schema,
         }, { transaction });
 
         // Update options if provided
@@ -518,6 +522,56 @@ const bulkUploadQuestions = async (req, res, next) => {
 };
 
 /**
+ * Run and test SQL query
+ * @route POST /api/v1/questions/run-sql
+ * @access Student, Admin
+ */
+const runSQL = async (req, res, next) => {
+    let transaction;
+    try {
+        const { sql, database_schema } = req.body;
+
+        if (!sql) {
+            return ApiResponse.error(res, 'SQL query is required', 400);
+        }
+
+        // 1. Start a transaction
+        transaction = await sequelize.transaction();
+
+        try {
+            // 2. Set up the schema if provided
+            if (database_schema) {
+                // SANDBOX TRICK: Convert all CREATE TABLE to CREATE TEMPORARY TABLE
+                // This prevents "Implicit Commits" and ensures isolation between students/runs.
+                const sandboxSchema = database_schema.replace(/\bCREATE\s+(?:TEMPORARY\s+)?TABLE\b/gi, 'CREATE TEMPORARY TABLE');
+
+                const statements = sandboxSchema.split(';').filter(s => s.trim());
+                for (const statement of statements) {
+                    await sequelize.query(statement, { transaction });
+                }
+            }
+
+            // 3. Run the student query
+            const [results] = await sequelize.query(sql, { transaction });
+
+            // 4. Rollback to keep database clean (Temporary tables in InnoDB roll back!)
+            await transaction.rollback();
+
+            return ApiResponse.success(res, results, 'SQL executed successfully');
+        } catch (error) {
+            console.error('SQL Execution Inner Error:', error);
+            if (transaction) {
+                try { await transaction.rollback(); } catch (e) { }
+            }
+            return ApiResponse.error(res, error.message, 400);
+        }
+    } catch (error) {
+        console.error('SQL Execution Outer Error:', error);
+        next(error);
+    }
+};
+
+/**
  * Download CSV template
  * @route GET /api/v1/questions/csv-template
  * @access Public
@@ -546,4 +600,5 @@ module.exports = {
     uploadQuestionImage,
     bulkUploadQuestions,
     downloadCSVTemplate,
+    runSQL,
 };

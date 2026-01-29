@@ -16,7 +16,7 @@ export default function ExamPage() {
     const { showToast } = useToast();
 
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
-    const [answers, setAnswers] = useState<Record<number, number>>({}); // exam_question_id -> selected_option_id
+    const [answers, setAnswers] = useState<Record<number, any>>({}); // exam_question_id -> selected_option_id OR sql_text
     const [questions, setQuestions] = useState<any[]>([]);
     const [examTitle, setExamTitle] = useState('');
     const [remainingTime, setRemainingTime] = useState(0);
@@ -39,8 +39,14 @@ export default function ExamPage() {
             setExamTitle(data.exam_title);
             setRemainingTime(data.remaining_time);
 
-            // Map existing answers if any (backend doesn't currently return existing answers for resumes in the same endpoint, 
-            // but we could have another API or extend this one. For now, assume fresh start).
+            // Map existing answers if any
+            const existingAnswers: Record<number, any> = {};
+            data.questions.forEach((q: any) => {
+                if (q.answer) {
+                    existingAnswers[q.id] = q.answer.selected_option_id || q.answer.answer_text;
+                }
+            });
+            setAnswers(existingAnswers);
         } catch (error: any) {
             console.error('Failed to fetch exam questions:', error);
             showToast(error.response?.data?.message || 'Failed to load exam. Redirecting to dashboard.', 'error');
@@ -50,11 +56,12 @@ export default function ExamPage() {
         }
     };
 
-    const saveAnswer = async (examQuestionId: number, optionId: number) => {
+    const saveAnswer = async (examQuestionId: number, optionId?: number, sqlText?: string) => {
         try {
             await api.post(`/student/attempts/${attemptId}/answer`, {
                 exam_question_id: examQuestionId,
-                selected_option_id: optionId
+                selected_option_id: optionId,
+                answer_text: sqlText
             });
         } catch (error) {
             console.error('Failed to auto-save answer:', error);
@@ -70,6 +77,17 @@ export default function ExamPage() {
 
         // Auto-save API call
         saveAnswer(currentQuestion.id, optionId);
+    };
+
+    const handleSqlChange = (sql: string) => {
+        const currentQuestion = questions[currentQuestionIndex];
+        setAnswers((prev) => ({
+            ...prev,
+            [currentQuestion.id]: sql
+        }));
+
+        // Auto-save SQL answer
+        saveAnswer(currentQuestion.id, undefined, sql);
     };
 
     const handleNext = () => {
@@ -179,8 +197,10 @@ export default function ExamPage() {
 
                             <QuestionCard
                                 question={currentQuestion.question}
-                                selectedOptionId={answers[currentQuestion.id]}
+                                selectedOptionId={typeof answers[currentQuestion.id] === 'number' ? answers[currentQuestion.id] : undefined}
                                 onOptionSelect={handleOptionSelect}
+                                sqlAnswer={typeof answers[currentQuestion.id] === 'string' ? answers[currentQuestion.id] : ''}
+                                onSqlChange={handleSqlChange}
                             />
                         </div>
 

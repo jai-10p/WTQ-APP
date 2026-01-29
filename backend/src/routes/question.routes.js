@@ -53,6 +53,12 @@ router.get(
     questionController.downloadCSVTemplate
 );
 
+router.post(
+    '/run-sql',
+    authenticate,
+    questionController.runSQL
+);
+
 /**
  * @route   POST /api/v1/questions
  * @desc    Create new question with MCQ options
