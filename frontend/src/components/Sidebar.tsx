@@ -50,7 +50,7 @@ export function Sidebar() {
                     <div className="w-8 h-8 bg-green-600 rounded-lg flex items-center justify-center">
                         <GraduationCap className="text-white w-5 h-5" />
                     </div>
-                    <span className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">ExamPortal</span>
+                    <span className="text-xl font-bold text-gray-900 dark:text-white tracking-tight">WTQ</span>
                 </div>
             </div>
 

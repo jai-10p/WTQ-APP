@@ -11,7 +11,7 @@ const { body } = require('express-validator');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 
 const loginValidator = [
-    body('email').isEmail().withMessage('Invalid email'),
+    body('email').notEmpty().withMessage('Username or Email is required'),
     body('password').notEmpty().withMessage('Password is required')
 ];
 

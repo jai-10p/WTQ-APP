@@ -14,10 +14,23 @@ const ApiResponse = require('../utils/apiResponse');
  */
 const login = async (req, res, next) => {
     try {
-        const { email, password } = req.body;
+        const { email: identifier, password } = req.body; // Accept email field as identifier
 
-        // 1. Find user
-        const user = await User.findOne({ where: { email } });
+        if (!identifier) {
+            return ApiResponse.error(res, 'Username or Email is required', 400);
+        }
+
+        // 1. Find user by email OR username
+        const { Op } = require('sequelize');
+        const user = await User.findOne({
+            where: {
+                [Op.or]: [
+                    { email: identifier },
+                    { username: identifier }
+                ]
+            }
+        });
+
         if (!user) {
             return ApiResponse.unauthorized(res, 'Invalid credentials');
         }
