@@ -44,8 +44,12 @@ const config = {
 
     // CORS Configuration
     cors: {
-        origin: process.env.CORS_ORIGIN || 'http://localhost:3000',
+        origin: process.env.CORS_ORIGIN
+            ? process.env.CORS_ORIGIN.split(',')
+            : ['http://localhost:3000', 'http://localhost:3001', 'https://wtq-app.vercel.app'],
         credentials: true,
+        methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+        allowedHeaders: ['Content-Type', 'Authorization']
     },
 
     // Rate Limiting
