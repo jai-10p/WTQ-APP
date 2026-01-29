@@ -14,12 +14,20 @@ const { errorHandler, notFoundHandler } = require('./middlewares/errorHandler');
 const app = express();
 
 // ============================================================
-// SECURITY MIDDLEWARE
+// SECURITY & CORS MIDDLEWARE
 // ============================================================
+// Debug origin logging
+app.use((req, res, next) => {
+    if (config.env === 'development' || process.env.DEBUG_CORS === 'true') {
+        console.log(`[CORS DEBUG] Request from Origin: ${req.headers.origin} | Path: ${req.path}`);
+    }
+    next();
+});
+
+app.use(cors(config.cors)); // CORS must be first for preflight to work correctly
 app.use(helmet({
     crossOriginResourcePolicy: { policy: "cross-origin" }
 })); // Security headers
-app.use(cors(config.cors)); // CORS configuration
 
 // ============================================================
 // BODY PARSING MIDDLEWARE

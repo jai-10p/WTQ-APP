@@ -44,12 +44,33 @@ const config = {
 
     // CORS Configuration
     cors: {
-        origin: process.env.CORS_ORIGIN
-            ? process.env.CORS_ORIGIN.split(',')
-            : ['http://localhost:3000', 'http://localhost:3001', 'https://wtq-app.vercel.app'],
+        origin: function (origin, callback) {
+            const allowedOrigins = [
+                'http://localhost:3000',
+                'http://localhost:3001',
+                'https://wtq-app.vercel.app'
+            ];
+
+            if (process.env.CORS_ORIGIN) {
+                const envOrigins = process.env.CORS_ORIGIN.split(',').map(o => o.trim());
+                allowedOrigins.push(...envOrigins);
+            }
+
+            // Allow if:
+            // 1. No origin (same-origin, server-to-server)
+            // 2. Exact match in allowedOrigins
+            // 3. Any vercel.app subdomain
+            if (!origin || allowedOrigins.includes(origin) || origin.endsWith('.vercel.app')) {
+                callback(null, true);
+            } else {
+                console.log('Blocked by CORS:', origin);
+                callback(new Error('Not allowed by CORS'));
+            }
+        },
         credentials: true,
         methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-        allowedHeaders: ['Content-Type', 'Authorization']
+        allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
+        optionsSuccessStatus: 204
     },
 
     // Rate Limiting
