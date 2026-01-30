@@ -18,7 +18,7 @@ const createQuestion = async (req, res, next) => {
 
     try {
         const {
-            category_id,
+            category,
             question_text,
             image_url,
             difficulty,
@@ -59,6 +59,7 @@ const createQuestion = async (req, res, next) => {
                 weightage: weightage || 1.0,
                 created_by: req.user.id,
                 question_type,
+                category: category || 'General',
                 reference_solution: req.body.reference_solution,
                 database_schema: req.body.database_schema,
             },
@@ -108,7 +109,7 @@ const getAllQuestions = async (req, res, next) => {
         const {
             page = 1,
             limit = 20,
-            category_id,
+            category,
             difficulty,
             is_active,
             search,
@@ -116,7 +117,7 @@ const getAllQuestions = async (req, res, next) => {
         const offset = (page - 1) * limit;
 
         const whereClause = {};
-        if (category_id) whereClause.category_id = category_id;
+        if (category) whereClause.category = category;
         if (difficulty) whereClause.difficulty = difficulty;
         if (is_active !== undefined) whereClause.is_active = is_active === 'true';
         if (search) {
@@ -192,7 +193,7 @@ const updateQuestion = async (req, res, next) => {
     try {
         const { id } = req.params;
         const {
-            category_id,
+            category,
             question_text,
             image_url,
             difficulty,
@@ -250,6 +251,7 @@ const updateQuestion = async (req, res, next) => {
             difficulty,
             weightage,
             is_active,
+            category,
             question_type: req.body.question_type,
             reference_solution: req.body.reference_solution,
             database_schema: req.body.database_schema,
@@ -567,7 +569,7 @@ const runSQL = async (req, res, next) => {
             if (database_schema) {
                 // SANDBOX TRICK: Convert all CREATE TABLE to CREATE TEMPORARY TABLE
                 // This prevents "Implicit Commits" and ensures isolation between students/runs.
-                const sandboxSchema = database_schema.replace(/\bCREATE\s+(?:TEMPORARY\s+)?TABLE\b/gi, 'CREATE TEMPORARY TABLE');
+                const sandboxSchema = database_schema.replace(/\bCREATE\s+(?:TEMPORARY\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`"']?)([a-zA-Z0-9_]+)\1/gi, 'DROP TEMPORARY TABLE IF EXISTS $1$2$1; CREATE TEMPORARY TABLE $1$2$1');
 
                 const statements = sandboxSchema.split(';').filter(s => s.trim());
                 for (const statement of statements) {

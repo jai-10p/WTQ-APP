@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { User, Search, Plus, MoreVertical, Shield, Trash2, Edit, Loader2 } from 'lucide-react';
+import { Search, Plus, Trash2, Edit, Loader2, Download } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/context/ToastContext';
 
@@ -11,6 +11,7 @@ export default function UsersPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [roleFilter, setRoleFilter] = useState('all');
+    const [designationFilter, setDesignationFilter] = useState('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [isEditMode, setIsEditMode] = useState(false);
     const [currentUserId, setCurrentUserId] = useState<number | null>(null);
@@ -22,6 +23,7 @@ export default function UsersPage() {
 
     const fetchUsers = async () => {
         try {
+            setLoading(true);
             const response: any = await api.get('/users');
             setUsers(response.data.data);
         } catch (error) {
@@ -37,9 +39,37 @@ export default function UsersPage() {
             user.email?.toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesRole = roleFilter === 'all' || user.role === roleFilter;
+        const matchesDesignation = designationFilter === 'all' || user.designation === designationFilter;
 
-        return matchesSearch && matchesRole;
+        return matchesSearch && matchesRole && matchesDesignation;
     });
+
+    const exportToCSV = () => {
+        const headers = ['Username', 'Email', 'Role', 'Designation', 'Status', 'Joined At'];
+        const csvRows = filteredUsers.map(user => [
+            user.username,
+            user.email,
+            user.role,
+            user.designation || '-',
+            user.is_active ? 'Active' : 'Inactive',
+            new Date(user.created_at).toLocaleDateString()
+        ]);
+
+        const csvContent = [
+            headers.join(','),
+            ...csvRows.map(row => row.join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `users_export_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     const resetForm = () => {
         setFormData({ username: '', email: '', role: 'student', password: '', designation: 'QA' });
@@ -70,7 +100,7 @@ export default function UsersPage() {
             username: user.username,
             email: user.email,
             role: user.role,
-            password: '', // Password not required for edit unless changing
+            password: '',
             designation: user.designation || 'QA'
         });
         setCurrentUserId(user.id);
@@ -96,19 +126,28 @@ export default function UsersPage() {
                     <h1 className="text-2xl font-bold text-gray-900">User Management</h1>
                     <p className="text-gray-500 mt-1">Manage system administrators, invigilators, and students.</p>
                 </div>
-                <button
-                    onClick={() => { resetForm(); setIsModalOpen(true); }}
-                    className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
-                >
-                    <Plus className="w-4 h-4" />
-                    Add User
-                </button>
+                <div className="flex gap-3">
+                    <button
+                        onClick={exportToCSV}
+                        className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                    >
+                        <Download className="w-4 h-4" />
+                        Export
+                    </button>
+                    <button
+                        onClick={() => { resetForm(); setIsModalOpen(true); }}
+                        className="flex items-center gap-2 bg-green-600 text-white px-4 py-2 rounded-lg hover:bg-green-700 transition-colors shadow-sm"
+                    >
+                        <Plus className="w-4 h-4" />
+                        Add User
+                    </button>
+                </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
                 {/* Toolbar */}
-                <div className="p-4 border-b border-gray-100 flex items-center gap-4">
-                    <div className="relative flex-1 max-w-md">
+                <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-4">
+                    <div className="relative flex-1 min-w-[300px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
                             type="text"
@@ -118,16 +157,29 @@ export default function UsersPage() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
-                    <select
-                        className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
-                        value={roleFilter}
-                        onChange={(e) => setRoleFilter(e.target.value)}
-                    >
-                        <option value="all">All Roles</option>
-                        <option value="admin">Admin</option>
-                        <option value="invigilator">Invigilator</option>
-                        <option value="student">Student</option>
-                    </select>
+                    <div className="flex items-center gap-2">
+                        <span className="text-xs font-bold text-gray-400 uppercase">Filters:</span>
+                        <select
+                            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                            value={roleFilter}
+                            onChange={(e) => setRoleFilter(e.target.value)}
+                        >
+                            <option value="all">All Roles</option>
+                            <option value="admin">Admin</option>
+                            <option value="invigilator">Invigilator</option>
+                            <option value="student">Student</option>
+                        </select>
+                        <select
+                            className="border border-gray-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-green-500"
+                            value={designationFilter}
+                            onChange={(e) => setDesignationFilter(e.target.value)}
+                        >
+                            <option value="all">All Designations</option>
+                            <option value="QA">QA</option>
+                            <option value="DEV">DEV</option>
+                            <option value="UI/UX">UI/UX</option>
+                        </select>
+                    </div>
                 </div>
 
                 {/* Table */}
@@ -238,7 +290,7 @@ export default function UsersPage() {
                                     <input
                                         type="text"
                                         required
-                                        className="w-full border rounded-lg px-3 py-2"
+                                        className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500"
                                         value={formData.username}
                                         onChange={(e) => setFormData({ ...formData, username: e.target.value })}
                                     />
@@ -248,7 +300,7 @@ export default function UsersPage() {
                                     <input
                                         type="email"
                                         required
-                                        className="w-full border rounded-lg px-3 py-2"
+                                        className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500"
                                         value={formData.email}
                                         onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                                     />
@@ -259,7 +311,7 @@ export default function UsersPage() {
                                         type="password"
                                         required={!isEditMode}
                                         minLength={6}
-                                        className="w-full border rounded-lg px-3 py-2"
+                                        className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500"
                                         value={formData.password}
                                         onChange={(e) => setFormData({ ...formData, password: e.target.value })}
                                     />
@@ -267,7 +319,7 @@ export default function UsersPage() {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Role</label>
                                     <select
-                                        className="w-full border rounded-lg px-3 py-2"
+                                        className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500"
                                         value={formData.role}
                                         onChange={(e) => setFormData({ ...formData, role: e.target.value })}
                                     >
@@ -279,7 +331,7 @@ export default function UsersPage() {
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Designation</label>
                                     <select
-                                        className="w-full border rounded-lg px-3 py-2"
+                                        className="w-full border rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-green-500"
                                         value={formData.designation}
                                         onChange={(e) => setFormData({ ...formData, designation: e.target.value })}
                                     >

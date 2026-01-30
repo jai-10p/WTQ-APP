@@ -66,6 +66,11 @@ const Question = sequelize.define('questions', {
         allowNull: false,
         defaultValue: true,
     },
+    category: {
+        type: DataTypes.ENUM('QA', 'DEV', 'UI/UX', 'General'),
+        allowNull: false,
+        defaultValue: 'General'
+    },
 }, {
     timestamps: true,
     createdAt: 'created_at',

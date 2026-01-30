@@ -39,30 +39,28 @@ const getInvigilatorStats = async (req, res) => {
         const invigilatorId = req.user.id;
         const designation = req.user.designation;
 
-        // Exams either created by this invigilator OR matching their designation
-        const examWhere = {
-            [Op.or]: [
-                { created_by: invigilatorId },
-                designation ? { allowed_designations: { [Op.like]: `%"${designation}"%` } } : { id: -1 } // dummy if no designation
-            ]
-        };
+        // Requirement: Show count of exams created for that designation
+        // Example: If designation is 'QA', show exams where 'QA' is in allowed_designations
+        const examWhere = designation
+            ? { allowed_designations: { [Op.like]: `%"${designation}"%` } }
+            : { created_by: invigilatorId };
 
         const myExams = await Exam.count({ where: examWhere });
-        const myQuestions = await Question.count({ where: { created_by: invigilatorId } });
 
-        // Get results for exams visible to this invigilator
-        const examIds = await Exam.findAll({
+        // Get all exam IDs for these exams
+        const exams = await Exam.findAll({
             where: examWhere,
             attributes: ['id']
-        }).then(exams => exams.map(e => e.id));
+        });
+        const examIds = exams.map(e => e.id);
 
+        // Requirement: Show total attempts on these exams
         const totalAttemptsOnMyExams = await ExamAttempt.count({
-            where: { exam_id: { [Op.in]: examIds } }
+            where: { exam_id: { [Op.in]: examIds.length > 0 ? examIds : [-1] } }
         });
 
         return ApiResponse.success(res, {
             myExams,
-            myQuestions,
             totalAttemptsOnMyExams
         }, 'Invigilator stats fetched successfully');
     } catch (error) {

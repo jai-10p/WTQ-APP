@@ -8,11 +8,9 @@ import {
     Search,
     ChevronLeft,
     Loader2,
-    Save,
     GripVertical,
     FileQuestion,
-    CheckCircle2,
-    X
+    Filter
 } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/context/ToastContext';
@@ -30,7 +28,9 @@ export default function ExamQuestionsAssignmentPage() {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
     const [searchTerm, setSearchTerm] = useState('');
-    const [isAddModalOpen, setIsAddModalOpen] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [difficultyFilter, setDifficultyFilter] = useState('all');
+    const [typeFilter, setTypeFilter] = useState('all');
 
     useEffect(() => {
         if (examId) {
@@ -44,7 +44,7 @@ export default function ExamQuestionsAssignmentPage() {
             const [examRes, questionsRes, allQuestionsRes]: any = await Promise.all([
                 api.get(`/exams/${examId}`),
                 api.get(`/exams/${examId}/questions`),
-                api.get('/questions') // Fetch all for adding
+                api.get('/questions')
             ]);
 
             setExam(examRes.data.data);
@@ -59,10 +59,9 @@ export default function ExamQuestionsAssignmentPage() {
     };
 
     const handleAssign = async (question: any) => {
-        // Prepare data for assignment
         const newAssignment = {
             question_id: question.id,
-            question_weightage: 1.0, // Default weightage
+            question_weightage: 5,
             question_order: assignedQuestions.length + 1
         };
 
@@ -96,7 +95,6 @@ export default function ExamQuestionsAssignmentPage() {
 
     const handleUpdateWeightage = async (questionId: number, weightage: number) => {
         try {
-            // Find existing assignment to keep order
             const existing = assignedQuestions.find(q => q.question_id === questionId);
             await api.post(`/exams/${examId}/questions`, {
                 questions: [{
@@ -105,7 +103,6 @@ export default function ExamQuestionsAssignmentPage() {
                     question_order: existing.question_order
                 }]
             });
-            // Update local state for immediate feedback
             setAssignedQuestions(prev => prev.map(q =>
                 q.question_id === questionId ? { ...q, question_weightage: weightage } : q
             ));
@@ -118,15 +115,19 @@ export default function ExamQuestionsAssignmentPage() {
         return assignedQuestions.some(aq => aq.question_id === questionId);
     };
 
-    const filteredAvailable = availableQuestions.filter(q =>
-        q.question_text.toLowerCase().includes(searchTerm.toLowerCase()) && !isAssigned(q.id)
-    );
+    const filteredAvailable = availableQuestions.filter(q => {
+        const matchesSearch = q.question_text.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCategory = categoryFilter === 'all' || q.category === categoryFilter;
+        const matchesDifficulty = difficultyFilter === 'all' || q.difficulty === difficultyFilter;
+        const matchesType = typeFilter === 'all' || q.question_type === typeFilter;
+        return matchesSearch && matchesCategory && matchesDifficulty && matchesType && !isAssigned(q.id);
+    });
 
     if (loading) {
         return (
             <div className="h-[60vh] flex flex-col items-center justify-center">
                 <Loader2 className="w-10 h-10 animate-spin text-blue-600 mb-4" />
-                <p className="text-gray-500 font-medium">Loading exam questions...</p>
+                <p className="text-gray-500 font-medium tracking-tight">Loading exam questions...</p>
             </div>
         );
     }
@@ -155,34 +156,44 @@ export default function ExamQuestionsAssignmentPage() {
                                 <FileQuestion className="w-4 h-4 text-blue-600" />
                                 Assigned Questions ({assignedQuestions.length})
                             </h2>
-                            <div className="text-xs text-gray-500 font-medium">
-                                Total Weightage: {assignedQuestions.reduce((sum, q) => sum + parseFloat(q.question_weightage), 0).toFixed(1)}
+                            <div className="text-xs text-gray-400 font-bold uppercase tracking-widest">
+                                Total Pts: {Math.round(assignedQuestions.reduce((sum, q) => sum + parseFloat(q.question_weightage), 0))}
                             </div>
                         </div>
 
                         <div className="divide-y divide-gray-100">
                             {assignedQuestions.length === 0 ? (
-                                <div className="p-12 text-center">
-                                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4">
-                                        <FileQuestion className="w-8 h-8 text-gray-300" />
+                                <div className="p-20 text-center">
+                                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mx-auto mb-4 border border-dashed border-gray-200">
+                                        <FileQuestion className="w-8 h-8 text-gray-200" />
                                     </div>
-                                    <h3 className="text-gray-900 font-medium">No questions assigned yet</h3>
-                                    <p className="text-gray-500 text-sm mt-1">Start by adding questions from the bank.</p>
+                                    <h3 className="text-gray-900 font-bold">No questions assigned</h3>
+                                    <p className="text-gray-400 text-sm mt-1">Add questions from the bank on the right.</p>
                                 </div>
                             ) : (
                                 assignedQuestions.map((aq, index) => (
-                                    <div key={aq.id} className="p-6 flex items-start gap-4 hover:bg-gray-50/50 transition-colors">
-                                        <div className="mt-1 text-gray-400">
+                                    <div key={aq.id} className="p-6 flex items-start gap-4 hover:bg-gray-50/50 transition-colors group">
+                                        <div className="mt-1 text-gray-300">
                                             <GripVertical className="w-4 h-4" />
                                         </div>
                                         <div className="flex-1">
                                             <div className="flex items-start justify-between gap-4">
-                                                <p className="text-gray-900 font-medium leading-relaxed">
-                                                    {aq.question?.question_text}
-                                                </p>
+                                                <div>
+                                                    <p className="text-gray-900 font-semibold leading-relaxed">
+                                                        {aq.question?.question_text}
+                                                    </p>
+                                                    <div className="flex items-center gap-2 mt-2">
+                                                        <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase">
+                                                            {aq.question?.category}
+                                                        </span>
+                                                        <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                                            Type: {aq.question?.question_type}
+                                                        </span>
+                                                    </div>
+                                                </div>
                                                 <button
                                                     onClick={() => handleRemove(aq.question_id)}
-                                                    className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors shrink-0"
+                                                    className="p-1.5 text-gray-300 hover:text-red-500 rounded-lg hover:bg-red-50 transition-all opacity-0 group-hover:opacity-100"
                                                 >
                                                     <Trash2 className="w-4 h-4" />
                                                 </button>
@@ -192,16 +203,15 @@ export default function ExamQuestionsAssignmentPage() {
                                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Weightage:</span>
                                                     <input
                                                         type="number"
-                                                        step="0.5"
-                                                        min="0.5"
-                                                        className="w-16 px-2 py-1 border border-gray-200 rounded-md text-sm focus:ring-1 focus:ring-blue-500 outline-none"
-                                                        value={aq.question_weightage}
-                                                        onChange={(e) => handleUpdateWeightage(aq.question_id, parseFloat(e.target.value))}
+                                                        min="1"
+                                                        className="w-16 px-2 py-1 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold"
+                                                        value={Math.round(aq.question_weightage)}
+                                                        onChange={(e) => handleUpdateWeightage(aq.question_id, parseInt(e.target.value) || 0)}
                                                     />
                                                 </div>
                                                 <div className="flex items-center gap-2">
                                                     <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Order:</span>
-                                                    <span className="text-sm font-medium text-gray-900">{aq.question_order}</span>
+                                                    <span className="text-sm font-bold text-gray-900"># {aq.question_order}</span>
                                                 </div>
                                             </div>
                                         </div>
@@ -215,42 +225,89 @@ export default function ExamQuestionsAssignmentPage() {
                 {/* Add Questions Panel */}
                 <div className="space-y-4">
                     <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-6 sticky top-6">
-                        <h2 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
-                            <Plus className="w-5 h-5 text-green-600" />
-                            Add from Question Bank
-                        </h2>
+                        <h3 className="font-bold text-gray-900 mb-6 flex items-center gap-2">
+                            <Filter className="w-4 h-4 text-green-600" />
+                            Question Bank
+                        </h3>
 
-                        <div className="relative mb-6">
-                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                            <input
-                                type="text"
-                                placeholder="Search questions..."
-                                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-sm"
-                                value={searchTerm}
-                                onChange={(e) => setSearchTerm(e.target.value)}
-                            />
+                        <div className="space-y-3 mb-6">
+                            <div className="relative">
+                                <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                                <input
+                                    type="text"
+                                    placeholder="Search..."
+                                    className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 outline-none text-xs"
+                                    value={searchTerm}
+                                    onChange={(e) => setSearchTerm(e.target.value)}
+                                />
+                            </div>
+                            <div className="grid grid-cols-1 gap-2">
+                                <select
+                                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                                    value={categoryFilter}
+                                    onChange={(e) => setCategoryFilter(e.target.value)}
+                                >
+                                    <option value="all">Any Category</option>
+                                    <option value="QA">QA</option>
+                                    <option value="DEV">DEV</option>
+                                    <option value="UI/UX">UI/UX</option>
+                                    <option value="General">General</option>
+                                </select>
+                                <select
+                                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                                    value={difficultyFilter}
+                                    onChange={(e) => setDifficultyFilter(e.target.value)}
+                                >
+                                    <option value="all">Any Difficulty</option>
+                                    <option value="easy">Easy</option>
+                                    <option value="medium">Medium</option>
+                                    <option value="hard">Hard</option>
+                                </select>
+                                <select
+                                    className="w-full border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-medium"
+                                    value={typeFilter}
+                                    onChange={(e) => setTypeFilter(e.target.value)}
+                                >
+                                    <option value="all">Any Type</option>
+                                    <option value="mcq">MCQ</option>
+                                    <option value="sql">SQL</option>
+                                    <option value="output">Output</option>
+                                    <option value="statement">Statement</option>
+                                    <option value="coding">Coding</option>
+                                </select>
+                            </div>
                         </div>
 
-                        <div className="space-y-3 max-h-[500px] overflow-y-auto pr-2 scrollbar-hide">
+                        <div className="space-y-3 max-h-[400px] overflow-y-auto pr-1">
                             {filteredAvailable.length === 0 ? (
-                                <p className="text-center py-8 text-gray-500 text-sm">No available questions found matching your search.</p>
+                                <p className="text-center py-10 text-gray-400 text-xs font-medium">No available questions found.</p>
                             ) : (
                                 filteredAvailable.map((q) => (
-                                    <div key={q.id} className="p-3 border border-gray-100 rounded-lg hover:border-blue-200 hover:bg-blue-50/30 transition-all group">
-                                        <p className="text-sm text-gray-700 font-medium line-clamp-2 mb-3">
+                                    <div key={q.id} className="p-4 border border-gray-50 rounded-lg hover:border-blue-100 hover:bg-blue-50/50 transition-all group">
+                                        <p className="text-xs text-gray-700 font-semibold line-clamp-2 mb-3">
                                             {q.question_text}
                                         </p>
-                                        <div className="flex items-center justify-between">
-                                            <span className="text-[10px] font-bold text-gray-400 uppercase bg-gray-100 px-1.5 py-0.5 rounded">
-                                                {q.difficulty}
-                                            </span>
+                                        <div className="flex flex-wrap items-center justify-between gap-y-2">
+                                            <div className="flex items-center gap-1.5">
+                                                <span className="text-[9px] font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-100 uppercase">
+                                                    {q.category}
+                                                </span>
+                                                <span className={`text-[9px] font-bold px-1.5 py-0.5 rounded border uppercase
+                                                    ${q.difficulty === 'hard' ? 'bg-red-50 text-red-600 border-red-100' :
+                                                        q.difficulty === 'medium' ? 'bg-yellow-50 text-yellow-600 border-yellow-100' : 'bg-green-50 text-green-600 border-green-100'}`}>
+                                                    {q.difficulty}
+                                                </span>
+                                                <span className="text-[9px] font-bold text-gray-500 bg-gray-50 px-1.5 py-0.5 rounded border border-gray-100 uppercase">
+                                                    {q.question_type}
+                                                </span>
+                                            </div>
                                             <button
                                                 onClick={() => handleAssign(q)}
                                                 disabled={saving}
-                                                className="text-xs font-bold text-blue-600 hover:text-blue-700 flex items-center gap-1 group-hover:scale-105 transition-transform"
+                                                className="text-[10px] font-bold text-blue-600 hover:text-blue-700 hover:bg-blue-50 px-2 py-1 rounded-md transition-all flex items-center gap-1 uppercase tracking-wider"
                                             >
                                                 <Plus className="w-3 h-3" />
-                                                Add Question
+                                                Add
                                             </button>
                                         </div>
                                     </div>
@@ -261,10 +318,10 @@ export default function ExamQuestionsAssignmentPage() {
                         <div className="mt-8 pt-6 border-t border-gray-100">
                             <Link
                                 href="/dashboard/invigilator/questions"
-                                className="text-sm text-gray-500 hover:text-blue-600 flex items-center justify-center gap-2 bg-gray-50 py-2 rounded-lg transition-colors"
+                                className="text-xs font-bold text-white bg-blue-600 hover:bg-blue-700 flex items-center justify-center gap-2 py-3 rounded-lg transition-all uppercase tracking-widest shadow-md hover:shadow-lg active:scale-95"
                             >
-                                <Plus className="w-4 h-4" />
-                                Create New Question
+                                <Plus className="w-3 h-3" />
+                                Create New
                             </Link>
                         </div>
                     </div>

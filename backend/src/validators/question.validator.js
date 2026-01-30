@@ -6,10 +6,10 @@
 const { body, param } = require('express-validator');
 
 const createQuestionValidator = [
-    body('category_id')
-        .optional({ nullable: true })
-        .isInt({ min: 1 })
-        .withMessage('Valid category ID'),
+    body('category')
+        .notEmpty()
+        .isIn(['QA', 'DEV', 'UI/UX', 'General'])
+        .withMessage('Valid category is required (QA, DEV, UI/UX, or General)'),
     body('question_text')
         .trim()
         .notEmpty()
@@ -32,7 +32,7 @@ const createQuestionValidator = [
         .isFloat({ min: 0.01 })
         .withMessage('Weightage must be greater than 0'),
     body('reference_solution')
-        .if(body('question_type').isIn(['sql', 'output', 'statement', 'coding']))
+        .if(body('question_type').isIn(['sql', 'output', 'coding']))
         .trim()
         .notEmpty()
         .withMessage('Reference solution is required for this question type'),
@@ -59,10 +59,10 @@ const createQuestionValidator = [
 ];
 
 const updateQuestionValidator = [
-    body('category_id')
+    body('category')
         .optional()
-        .isInt({ min: 1 })
-        .withMessage('Valid category ID is required'),
+        .isIn(['QA', 'DEV', 'UI/UX', 'General'])
+        .withMessage('Category must be QA, DEV, UI/UX, or General'),
     body('question_text')
         .optional()
         .trim()

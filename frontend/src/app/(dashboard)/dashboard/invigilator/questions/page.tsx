@@ -1,7 +1,19 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, MoreVertical, Edit, Trash2, HelpCircle, Loader2, CheckCircle2, XCircle, Database, Play, Terminal, Code2 } from 'lucide-react';
+import {
+    Plus,
+    Search,
+    HelpCircle,
+    Loader2,
+    Database,
+    Play,
+    Terminal,
+    Edit,
+    Trash2,
+    X,
+    Code
+} from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -12,6 +24,9 @@ export default function QuestionsPage() {
     const [questions, setQuestions] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [categoryFilter, setCategoryFilter] = useState('all');
+    const [difficultyFilter, setDifficultyFilter] = useState('all');
+    const [typeFilter, setTypeFilter] = useState('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState<any>(null);
 
@@ -20,6 +35,7 @@ export default function QuestionsPage() {
         difficulty: 'medium',
         weightage: 1,
         question_type: 'mcq',
+        category: 'QA',
         reference_solution: '',
         database_schema: '',
         options: [
@@ -27,7 +43,8 @@ export default function QuestionsPage() {
             { option_text: '', is_correct: false, display_order: 2 },
             { option_text: '', is_correct: false, display_order: 3 },
             { option_text: '', is_correct: false, display_order: 4 },
-        ]
+        ],
+        test_cases: [{ input: '', expected_output: '' }]
     });
 
     useEffect(() => {
@@ -36,6 +53,7 @@ export default function QuestionsPage() {
 
     const fetchInitialData = async () => {
         try {
+            setLoading(true);
             const response: any = await api.get('/questions');
             setQuestions(response.data.data.questions);
         } catch (error) {
@@ -48,7 +66,6 @@ export default function QuestionsPage() {
     const handleOptionChange = (index: number, field: string, value: any) => {
         const newOptions = [...formData.options];
         if (field === 'is_correct' && value === true) {
-            // Radio-like behavior for single correct answer (though backend supports multiple)
             newOptions.forEach((opt, i) => opt.is_correct = i === index);
         } else {
             (newOptions[index] as any)[field] = value;
@@ -56,40 +73,47 @@ export default function QuestionsPage() {
         setFormData({ ...formData, options: newOptions });
     };
 
+    const handleTestCaseChange = (index: number, field: 'input' | 'expected_output', value: string) => {
+        const newTestCases = [...formData.test_cases];
+        newTestCases[index][field] = value;
+        setFormData({ ...formData, test_cases: newTestCases });
+    };
+
+    const addTestCase = () => {
+        setFormData({
+            ...formData,
+            test_cases: [...formData.test_cases, { input: '', expected_output: '' }]
+        });
+    };
+
+    const removeTestCase = (index: number) => {
+        if (formData.test_cases.length <= 1) return;
+        const newTestCases = formData.test_cases.filter((_, i) => i !== index);
+        setFormData({ ...formData, test_cases: newTestCases });
+    };
+
     const handleSaveQuestion = async (e: React.FormEvent) => {
         e.preventDefault();
 
-        // Basic validation
-        if (formData.question_type === 'mcq' && formData.options.some(opt => !opt.option_text.trim())) {
+        // Validate
+        if ((formData.question_type === 'mcq' || formData.question_type === 'statement') && formData.options.some(opt => !opt.option_text.trim())) {
             showToast('Please fill in all option texts', 'warning');
             return;
         }
 
-        if ((formData.question_type === 'sql' || formData.question_type === 'output') && !formData.reference_solution.trim()) {
-            showToast('Please provide a reference solution', 'warning');
-            return;
-        }
+        const dataToSave = { ...formData };
 
+        // Prepare data based on type
         if (formData.question_type === 'coding') {
-            try {
-                const config = JSON.parse(formData.reference_solution || '{}');
-                const testCases = config.test_cases || [];
-                if (testCases.length === 0 || !testCases.some((tc: any) => tc.expected_output?.trim())) {
-                    showToast('Please add at least one test case with expected output', 'warning');
-                    return;
-                }
-            } catch (e) {
-                showToast('Invalid test case format', 'error');
-                return;
-            }
+            dataToSave.reference_solution = JSON.stringify({ test_cases: formData.test_cases });
         }
 
         try {
             if (editingQuestion) {
-                await api.put(`/questions/${editingQuestion.id}`, formData);
+                await api.put(`/questions/${editingQuestion.id}`, dataToSave);
                 showToast('Question updated successfully!', 'success');
             } else {
-                await api.post('/questions', formData);
+                await api.post('/questions', dataToSave);
                 showToast('Question created successfully!', 'success');
             }
             setIsModalOpen(false);
@@ -107,6 +131,7 @@ export default function QuestionsPage() {
             difficulty: 'medium',
             weightage: 1,
             question_type: 'mcq',
+            category: 'QA',
             reference_solution: '',
             database_schema: '',
             options: [
@@ -114,27 +139,22 @@ export default function QuestionsPage() {
                 { option_text: '', is_correct: false, display_order: 2 },
                 { option_text: '', is_correct: false, display_order: 3 },
                 { option_text: '', is_correct: false, display_order: 4 },
-            ]
+            ],
+            test_cases: [{ input: '', expected_output: '' }]
         });
     };
 
     const handleTypeChange = (type: string) => {
         const newData = { ...formData, question_type: type };
-
-        // Auto-configure options for statement questions
         if (type === 'statement') {
             newData.options = [
                 { option_text: 'True', is_correct: true, display_order: 1 },
                 { option_text: 'False', is_correct: false, display_order: 2 }
             ];
         } else if (type === 'coding') {
-            newData.reference_solution = JSON.stringify({
-                test_cases: [
-                    { input: '', expected_output: '' }
-                ]
-            });
             newData.options = [];
-        } else if (type === 'mcq' && formData.options.length < 3) {
+            newData.test_cases = [{ input: '', expected_output: '' }];
+        } else if (type === 'mcq' && formData.options.length < 2) {
             newData.options = [
                 { option_text: '', is_correct: true, display_order: 1 },
                 { option_text: '', is_correct: false, display_order: 2 },
@@ -142,29 +162,36 @@ export default function QuestionsPage() {
                 { option_text: '', is_correct: false, display_order: 4 },
             ];
         }
-
         setFormData(newData);
     };
 
     const handleEditClick = (q: any) => {
         setEditingQuestion(q);
+        let testCases = [{ input: '', expected_output: '' }];
+
+        if (q.question_type === 'coding' && q.reference_solution) {
+            try {
+                const parsed = JSON.parse(q.reference_solution);
+                testCases = parsed.test_cases || testCases;
+            } catch (e) {
+                console.error('Failed to parse test cases', e);
+            }
+        }
+
         setFormData({
             question_text: q.question_text,
             difficulty: q.difficulty,
             weightage: q.weightage,
             question_type: q.question_type || 'mcq',
+            category: q.category || 'QA',
             reference_solution: q.reference_solution || '',
             database_schema: q.database_schema || '',
             options: q.options?.map((opt: any) => ({
                 option_text: opt.option_text,
                 is_correct: opt.is_correct,
                 display_order: opt.display_order
-            })) || [
-                    { option_text: '', is_correct: true, display_order: 1 },
-                    { option_text: '', is_correct: false, display_order: 2 },
-                    { option_text: '', is_correct: false, display_order: 3 },
-                    { option_text: '', is_correct: false, display_order: 4 },
-                ]
+            })) || [],
+            test_cases: testCases
         });
         setIsModalOpen(true);
     };
@@ -181,11 +208,11 @@ export default function QuestionsPage() {
     };
 
     const filteredQuestions = questions.filter(q => {
-        const searchLow = searchTerm.toLowerCase();
-        return (
-            q.question_text?.toLowerCase().includes(searchLow) ||
-            q.difficulty?.toLowerCase().includes(searchLow)
-        );
+        const matchesSearch = q.question_text?.toLowerCase().includes(searchTerm.toLowerCase());
+        const matchesCategory = categoryFilter === 'all' || q.category === categoryFilter;
+        const matchesDifficulty = difficultyFilter === 'all' || q.difficulty === difficultyFilter;
+        const matchesType = typeFilter === 'all' || q.question_type === typeFilter;
+        return matchesSearch && matchesCategory && matchesDifficulty && matchesType;
     });
 
     return (
@@ -197,8 +224,8 @@ export default function QuestionsPage() {
                 </div>
                 {user?.role === 'invigilator' && (
                     <button
-                        onClick={() => setIsModalOpen(true)}
-                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                        onClick={() => { resetForm(); setIsModalOpen(true); }}
+                        className="flex items-center gap-2 bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-bold"
                     >
                         <Plus className="w-4 h-4" />
                         Add Question
@@ -207,8 +234,8 @@ export default function QuestionsPage() {
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4">
-                    <div className="relative flex-1 max-w-md">
+                <div className="p-4 border-b border-gray-100 flex flex-wrap items-center gap-4">
+                    <div className="relative flex-1 min-w-[300px]">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
                         <input
                             type="text"
@@ -218,105 +245,117 @@ export default function QuestionsPage() {
                             onChange={(e) => setSearchTerm(e.target.value)}
                         />
                     </div>
+                    <div className="flex flex-wrap items-center gap-4">
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Category:</span>
+                            <select
+                                className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-bold bg-white"
+                                value={categoryFilter}
+                                onChange={(e) => setCategoryFilter(e.target.value)}
+                            >
+                                <option value="all">All</option>
+                                <option value="QA">QA</option>
+                                <option value="DEV">DEV</option>
+                                <option value="UI/UX">UI/UX</option>
+                                <option value="General">General</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Difficulty:</span>
+                            <select
+                                className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-bold bg-white"
+                                value={difficultyFilter}
+                                onChange={(e) => setDifficultyFilter(e.target.value)}
+                            >
+                                <option value="all">All</option>
+                                <option value="easy">Easy</option>
+                                <option value="medium">Medium</option>
+                                <option value="hard">Hard</option>
+                            </select>
+                        </div>
+
+                        <div className="flex items-center gap-2">
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Type:</span>
+                            <select
+                                className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-bold bg-white"
+                                value={typeFilter}
+                                onChange={(e) => setTypeFilter(e.target.value)}
+                            >
+                                <option value="all">All</option>
+                                <option value="mcq">MCQ</option>
+                                <option value="sql">SQL</option>
+                                <option value="output">Output</option>
+                                <option value="statement">Statement</option>
+                                <option value="coding">Coding</option>
+                            </select>
+                        </div>
+                    </div>
                 </div>
 
                 <div className="overflow-x-auto">
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 border-b border-gray-100">
                             <tr>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Question</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Difficulty</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type / Info</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Question</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">For</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Difficulty</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Type</th>
+                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {loading ? (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-10 text-center">
-                                        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto" />
-                                        <p className="text-gray-500 mt-2">Loading questions...</p>
+                                    <td colSpan={5} className="px-6 py-20 text-center">
+                                        <Loader2 className="w-8 h-8 animate-spin text-blue-600 mx-auto mb-2" />
+                                        <p className="text-gray-500 text-sm">Loading question bank...</p>
                                     </td>
                                 </tr>
                             ) : filteredQuestions.length === 0 ? (
                                 <tr>
-                                    <td colSpan={5} className="px-6 py-10 text-center text-gray-500">
-                                        No questions found.
+                                    <td colSpan={5} className="px-6 py-20 text-center text-gray-400 font-medium">
+                                        No questions match your criteria.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredQuestions.map((q) => (
-                                    <tr key={q.id} className="hover:bg-gray-50 transition-colors">
+                                    <tr key={q.id} className="hover:bg-gray-50 transition-colors group">
                                         <td className="px-6 py-4 max-w-md">
-                                            <div className="flex items-start gap-3">
-                                                <div className="mt-1 w-8 h-8 rounded-lg bg-purple-50 flex items-center justify-center text-purple-600 flex-shrink-0">
+                                            <div className="flex items-start gap-4">
+                                                <div className="mt-1 w-9 h-9 rounded-lg bg-orange-50 border border-orange-100 flex items-center justify-center text-orange-600 flex-shrink-0">
                                                     <HelpCircle className="w-4 h-4" />
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-medium text-gray-900 line-clamp-2">{q.question_text}</p>
-                                                    <p className="text-xs text-gray-500 mt-1">Weightage: {q.weightage}</p>
+                                                    <p className="text-sm font-bold text-gray-900 line-clamp-2">{q.question_text}</p>
+                                                    <p className="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-widest">Points • {q.weightage}</p>
                                                 </div>
                                             </div>
                                         </td>
+                                        <td className="px-6 py-4 text-center">
+                                            <span className="text-[10px] font-bold text-blue-600 bg-blue-50 px-2 py-0.5 rounded border border-blue-100 uppercase">
+                                                {q.category}
+                                            </span>
+                                        </td>
                                         <td className="px-6 py-4">
-                                            <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium capitalize
-                                                ${q.difficulty === 'hard' ? 'bg-red-100 text-red-800' :
-                                                    q.difficulty === 'medium' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
+                                            <span className={`inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wide
+                                                ${q.difficulty === 'hard' ? 'bg-red-50 text-red-700 border border-red-100' :
+                                                    q.difficulty === 'medium' ? 'bg-yellow-50 text-yellow-700 border border-yellow-100' : 'bg-green-50 text-green-700 border border-green-100'}`}>
                                                 {q.difficulty}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4">
-                                            {q.question_type === 'sql' ? (
-                                                <div className="flex items-center gap-2 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded w-fit border border-blue-100">
-                                                    <Database className="w-3 h-3" />
-                                                    SQL Query
-                                                </div>
-                                            ) : q.question_type === 'output' ? (
-                                                <div className="flex items-center gap-2 text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded w-fit border border-purple-100">
-                                                    <Play className="w-3 h-3" />
-                                                    Output
-                                                </div>
-                                            ) : q.question_type === 'statement' ? (
-                                                <div className="flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded w-fit border border-amber-100">
-                                                    <CheckCircle2 className="w-3 h-3" />
-                                                    Statement
-                                                </div>
-                                            ) : q.question_type === 'coding' ? (
-                                                <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-fit border border-emerald-100">
-                                                    <Terminal className="w-3 h-3" />
-                                                    Coding
-                                                </div>
-                                            ) : (
-                                                <>
-                                                    <div className="flex gap-1">
-                                                        {q.options?.map((opt: any) => (
-                                                            <div
-                                                                key={opt.id}
-                                                                title={opt.option_text}
-                                                                className={`w-2 h-2 rounded-full ${opt.is_correct ? 'bg-green-500' : 'bg-gray-300'}`}
-                                                            />
-                                                        ))}
-                                                    </div>
-                                                    <p className="text-[10px] text-gray-400 mt-1">{q.options?.length} Options</p>
-                                                </>
-                                            )}
+                                            <div className="text-[10px] font-bold uppercase tracking-widest text-gray-500 flex items-center gap-1.5 bg-gray-50 px-2 py-1 rounded w-fit">
+                                                {q.question_type === 'sql' && <Database className="w-3 h-3 text-blue-500" />}
+                                                {q.question_type === 'coding' && <Terminal className="w-3 h-3 text-green-500" />}
+                                                {q.question_type === 'output' && <Play className="w-3 h-3 text-purple-500" />}
+                                                {q.question_type}
+                                            </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <div className="flex items-center justify-end gap-2">
-                                                <button
-                                                    onClick={() => handleEditClick(q)}
-                                                    className="p-1.5 text-gray-400 hover:text-blue-600 rounded-lg hover:bg-blue-50 transition-colors"
-                                                    title="Edit Question"
-                                                >
-                                                    <Edit className="w-4 h-4" />
-                                                </button>
-                                                <button
-                                                    onClick={() => handleDeleteQuestion(q.id)}
-                                                    className="p-1.5 text-gray-400 hover:text-red-600 rounded-lg hover:bg-red-50 transition-colors"
-                                                    title="Delete Question"
-                                                >
-                                                    <Trash2 className="w-4 h-4" />
-                                                </button>
+                                            <div className="flex items-center justify-end gap-1">
+                                                <button onClick={() => handleEditClick(q)} className="p-2 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors"><Edit className="w-4 h-4" /></button>
+                                                <button onClick={() => handleDeleteQuestion(q.id)} className="p-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"><Trash2 className="w-4 h-4" /></button>
                                             </div>
                                         </td>
                                     </tr>
@@ -327,239 +366,130 @@ export default function QuestionsPage() {
                 </div>
             </div>
 
-            {/* Create Question Modal */}
             {isModalOpen && (
-                <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-                    <div className="bg-white rounded-xl w-full max-w-2xl max-h-[90vh] overflow-y-auto p-6">
-                        <div className="flex items-center justify-between mb-6">
-                            <h2 className="text-xl font-bold text-gray-900">{editingQuestion ? 'Edit Question' : 'Add New Question'}</h2>
-                            <button onClick={() => { setIsModalOpen(false); setEditingQuestion(null); resetForm(); }} className="text-gray-400 hover:text-gray-600">
-                                <Plus className="w-6 h-6 rotate-45" />
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-white rounded-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col shadow-2xl animate-in fade-in zoom-in duration-200">
+                        <div className="p-6 border-b border-gray-100 flex items-center justify-between bg-gray-50/50">
+                            <h2 className="text-xl font-bold text-gray-900">{editingQuestion ? 'Modify Question' : 'Create New Question'}</h2>
+                            <button onClick={() => { setIsModalOpen(false); setEditingQuestion(null); }} className="p-2 text-gray-400 hover:text-gray-600 rounded-lg hover:bg-gray-100 transition-colors">
+                                <X className="w-5 h-5" />
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveQuestion} className="space-y-6">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div className="grid grid-cols-2 gap-4 col-span-2">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Difficulty</label>
-                                        <select
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 outline-none"
-                                            value={formData.difficulty}
-                                            onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
-                                        >
-                                            <option value="easy">Easy</option>
-                                            <option value="medium">Medium</option>
-                                            <option value="hard">Hard</option>
-                                        </select>
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Weightage</label>
-                                        <input
-                                            type="number"
-                                            required
-                                            min="1"
-                                            step="0.5"
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 outline-none"
-                                            value={formData.weightage || ''}
-                                            onChange={(e) => {
-                                                const val = e.target.value;
-                                                setFormData({ ...formData, weightage: val === '' ? 0 : parseFloat(val) });
-                                            }}
-                                        />
-                                    </div>
-                                    <div className="col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Question Type</label>
-                                        <div className="flex flex-wrap gap-4">
-                                            {[
-                                                { id: 'mcq', label: 'MCQ' },
-                                                { id: 'sql', label: 'SQL Query' },
-                                                { id: 'output', label: 'Output Prediction' },
-                                                { id: 'statement', label: 'Statement (T/F)' },
-                                                { id: 'coding', label: 'Coding (Polyglot)' }
-                                            ].map(type => (
-                                                <label key={type.id} className="flex items-center gap-2 cursor-pointer">
-                                                    <input
-                                                        type="radio"
-                                                        checked={formData.question_type === type.id}
-                                                        onChange={() => handleTypeChange(type.id)}
-                                                        className="w-4 h-4 text-blue-600"
-                                                    />
-                                                    <span className="text-sm">{type.label}</span>
-                                                </label>
-                                            ))}
-                                        </div>
-                                    </div>
+                        <form onSubmit={handleSaveQuestion} className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
+                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Category</label>
+                                    <select
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 bg-white"
+                                        value={formData.category}
+                                        onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                                    >
+                                        <option value="QA">QA</option>
+                                        <option value="DEV">DEV</option>
+                                        <option value="UI/UX">UI/UX</option>
+                                        <option value="General">General</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Difficulty</label>
+                                    <select
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 bg-white"
+                                        value={formData.difficulty}
+                                        onChange={(e) => setFormData({ ...formData, difficulty: e.target.value })}
+                                    >
+                                        <option value="easy">Easy</option>
+                                        <option value="medium">Medium</option>
+                                        <option value="hard">Hard</option>
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Weightage</label>
+                                    <input
+                                        type="number"
+                                        min="1"
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700"
+                                        value={formData.weightage}
+                                        onChange={(e) => setFormData({ ...formData, weightage: parseInt(e.target.value) || 1 })}
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Type</label>
+                                    <select
+                                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 bg-white"
+                                        value={formData.question_type}
+                                        onChange={(e) => handleTypeChange(e.target.value)}
+                                    >
+                                        <option value="mcq">MCQ</option>
+                                        <option value="sql">SQL Query</option>
+                                        <option value="output">Output</option>
+                                        <option value="statement">Statement</option>
+                                        <option value="coding">Coding</option>
+                                    </select>
                                 </div>
                             </div>
 
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">Question Text</label>
+                                <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Question Text</label>
                                 <textarea
                                     required
-                                    className="w-full border border-gray-200 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px]"
-                                    placeholder="Enter the question text here..."
+                                    rows={3}
+                                    placeholder="Enter the question description here..."
+                                    className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm outline-none focus:ring-2 focus:ring-blue-500 min-h-[100px] font-medium"
                                     value={formData.question_text}
                                     onChange={(e) => setFormData({ ...formData, question_text: e.target.value })}
                                 />
                             </div>
 
-                            {formData.question_type === 'mcq' || formData.question_type === 'statement' ? (
+                            {/* Options for MCQ/Statement */}
+                            {(formData.question_type === 'mcq' || formData.question_type === 'statement') && (
                                 <div className="space-y-4">
-                                    <label className="block text-sm font-medium text-gray-700">
-                                        {formData.question_type === 'statement' ? 'Options (Mark True or False)' : 'Options (Mark the correct answer)'}
-                                    </label>
-                                    {formData.options.map((opt, index) => (
-                                        <div key={index} className="flex items-center gap-3">
-                                            <input
-                                                type="radio"
-                                                name="correct_option"
-                                                checked={opt.is_correct}
-                                                onChange={() => handleOptionChange(index, 'is_correct', true)}
-                                                className="w-4 h-4 text-blue-600"
-                                            />
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">Answer Options</label>
+                                    {formData.options.map((opt, idx) => (
+                                        <div key={idx} className="flex gap-4 items-center group">
+                                            <div className="relative flex items-center">
+                                                <input
+                                                    type="radio"
+                                                    name="correct"
+                                                    checked={opt.is_correct}
+                                                    onChange={() => handleOptionChange(idx, 'is_correct', true)}
+                                                    className="w-5 h-5 text-blue-600 border-2 border-gray-200 focus:ring-offset-0 focus:ring-transparent"
+                                                />
+                                            </div>
                                             <input
                                                 type="text"
                                                 required
-                                                placeholder={`Option ${index + 1}`}
-                                                readOnly={formData.question_type === 'statement'}
-                                                className={`flex-1 border border-gray-200 rounded-lg px-3 py-2 outline-none ${formData.question_type === 'statement' ? 'bg-gray-50' : ''}`}
+                                                placeholder={`Option ${idx + 1}`}
+                                                className="flex-1 border border-gray-200 rounded-xl px-4 py-3 text-sm focus:ring-2 focus:ring-blue-500 outline-none transition-all font-medium"
                                                 value={opt.option_text}
-                                                onChange={(e) => handleOptionChange(index, 'option_text', e.target.value)}
+                                                onChange={(e) => handleOptionChange(idx, 'option_text', e.target.value)}
+                                                readOnly={formData.question_type === 'statement'}
                                             />
-                                            {opt.is_correct ? (
-                                                <CheckCircle2 className="w-5 h-5 text-green-500" />
-                                            ) : (
-                                                <XCircle className="w-5 h-5 text-gray-300" />
-                                            )}
                                         </div>
                                     ))}
                                 </div>
-                            ) : formData.question_type === 'sql' ? (
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Database Schema (Initial SQL)</label>
-                                        <p className="text-xs text-gray-500 mb-2">Provide CREATE TABLE and INSERT statements to setup the environment for this question.</p>
+                            )}
+
+                            {/* SQL Fields */}
+                            {formData.question_type === 'sql' && (
+                                <div className="space-y-6">
+                                    <div className="bg-blue-50/50 p-6 rounded-2xl border border-blue-100">
+                                        <label className="flex items-center gap-2 text-[10px] font-bold text-blue-600 uppercase tracking-widest mb-3">
+                                            <Database className="w-4 h-4" />
+                                            Database Schema (Setup SQL)
+                                        </label>
                                         <textarea
-                                            required
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[120px]"
-                                            placeholder="CREATE TABLE City (ID INT, Name VARCHAR(20)...); INSERT INTO City VALUES (1, 'New York'...);"
+                                            className="w-full border border-blue-200 rounded-xl px-4 py-4 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none bg-white min-h-[150px]"
+                                            placeholder="CREATE TABLE users (id INT, name VARCHAR(50)); ..."
                                             value={formData.database_schema}
                                             onChange={(e) => setFormData({ ...formData, database_schema: e.target.value })}
                                         />
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Reference Solution (Correct SQL Query)</label>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Reference SQL Solution</label>
                                         <textarea
-                                            required
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px]"
-                                            placeholder="SELECT * FROM City WHERE Population > 100000;"
-                                            value={formData.reference_solution}
-                                            onChange={(e) => setFormData({ ...formData, reference_solution: e.target.value })}
-                                        />
-                                    </div>
-                                </div>
-                            ) : formData.question_type === 'coding' ? (
-                                <div className="space-y-4">
-                                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
-                                        <h4 className="text-sm font-bold text-emerald-800 mb-2">🚀 Real Code Execution</h4>
-                                        <p className="text-xs text-emerald-700">Student code will be executed against these test cases. Their code must produce the expected output for each test.</p>
-                                    </div>
-
-                                    <label className="block text-sm font-medium text-gray-700">Test Cases</label>
-                                    <p className="text-xs text-gray-500 mb-2">Add input/output test cases. Leave input empty for programs that don't require input.</p>
-
-                                    {(() => {
-                                        let testCases: Array<{ input: string, expected_output: string }> = [];
-                                        try {
-                                            const config = JSON.parse(formData.reference_solution || '{}');
-                                            testCases = config.test_cases || [];
-                                        } catch (e) { testCases = []; }
-
-                                        return (
-                                            <div className="space-y-3">
-                                                {testCases.map((tc, idx) => (
-                                                    <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
-                                                        <div className="flex items-center justify-between mb-3">
-                                                            <span className="text-xs font-bold text-gray-500 uppercase">Test Case #{idx + 1}</span>
-                                                            <button
-                                                                type="button"
-                                                                onClick={() => {
-                                                                    const newCases = testCases.filter((_, i) => i !== idx);
-                                                                    setFormData({ ...formData, reference_solution: JSON.stringify({ test_cases: newCases }) });
-                                                                }}
-                                                                className="text-red-500 hover:text-red-700 text-xs font-medium"
-                                                            >
-                                                                Remove
-                                                            </button>
-                                                        </div>
-                                                        <div className="grid grid-cols-2 gap-3">
-                                                            <div>
-                                                                <label className="text-xs text-gray-500 mb-1 block">Input (stdin)</label>
-                                                                <textarea
-                                                                    className="w-full border border-gray-200 rounded px-2 py-1.5 font-mono text-xs focus:ring-1 focus:ring-emerald-500 outline-none min-h-[60px]"
-                                                                    placeholder="(empty for no input)"
-                                                                    value={tc.input || ''}
-                                                                    onChange={(e) => {
-                                                                        const newCases = [...testCases];
-                                                                        newCases[idx] = { ...newCases[idx], input: e.target.value };
-                                                                        setFormData({ ...formData, reference_solution: JSON.stringify({ test_cases: newCases }) });
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                            <div>
-                                                                <label className="text-xs text-gray-500 mb-1 block">Expected Output</label>
-                                                                <textarea
-                                                                    required
-                                                                    className="w-full border border-gray-200 rounded px-2 py-1.5 font-mono text-xs focus:ring-1 focus:ring-emerald-500 outline-none min-h-[60px]"
-                                                                    placeholder="Hello, World!"
-                                                                    value={tc.expected_output || ''}
-                                                                    onChange={(e) => {
-                                                                        const newCases = [...testCases];
-                                                                        newCases[idx] = { ...newCases[idx], expected_output: e.target.value };
-                                                                        setFormData({ ...formData, reference_solution: JSON.stringify({ test_cases: newCases }) });
-                                                                    }}
-                                                                />
-                                                            </div>
-                                                        </div>
-                                                    </div>
-                                                ))}
-
-                                                <button
-                                                    type="button"
-                                                    onClick={() => {
-                                                        const newCases = [...testCases, { input: '', expected_output: '' }];
-                                                        setFormData({ ...formData, reference_solution: JSON.stringify({ test_cases: newCases }) });
-                                                    }}
-                                                    className="w-full border-2 border-dashed border-emerald-300 rounded-lg py-3 text-emerald-600 hover:bg-emerald-50 transition-colors font-medium text-sm flex items-center justify-center gap-2"
-                                                >
-                                                    <Plus className="w-4 h-4" />
-                                                    Add Test Case
-                                                </button>
-                                            </div>
-                                        );
-                                    })()}
-                                </div>
-                            ) : (
-                                <div className="space-y-4">
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Code Snippet</label>
-                                        <p className="text-xs text-gray-500 mb-2">Provide the code student needs to analyze.</p>
-                                        <textarea
-                                            required
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[120px]"
-                                            placeholder="function test() { console.log('hello'); }"
-                                            value={formData.database_schema}
-                                            onChange={(e) => setFormData({ ...formData, database_schema: e.target.value })}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Expected Output</label>
-                                        <p className="text-xs text-gray-500 mb-2">The exact string the student must type to get points.</p>
-                                        <textarea
-                                            required
-                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px]"
-                                            placeholder="Enter the correct output..."
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-4 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50/50 min-h-[100px]"
+                                            placeholder="SELECT * FROM users WHERE id = 1;"
                                             value={formData.reference_solution}
                                             onChange={(e) => setFormData({ ...formData, reference_solution: e.target.value })}
                                         />
@@ -567,19 +497,94 @@ export default function QuestionsPage() {
                                 </div>
                             )}
 
-                            <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
-                                <button
-                                    type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
-                                >
-                                    Cancel
-                                </button>
-                                <button
-                                    type="submit"
-                                    className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors shadow-sm font-medium"
-                                >
-                                    {editingQuestion ? 'Update Question' : 'Save Question'}
+                            {/* Output Question Fields */}
+                            {formData.question_type === 'output' && (
+                                <div className="space-y-6">
+                                    <div>
+                                        <label className="flex items-center gap-2 text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">
+                                            <Code className="w-4 h-4" />
+                                            Code Snippet (Visible to Student)
+                                        </label>
+                                        <textarea
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-4 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none bg-zinc-900 text-zinc-100 min-h-[150px]"
+                                            value={formData.database_schema}
+                                            onChange={(e) => setFormData({ ...formData, database_schema: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Expected Output String</label>
+                                        <textarea
+                                            className="w-full border border-gray-200 rounded-xl px-4 py-3 text-sm font-mono focus:ring-2 focus:ring-blue-500 outline-none bg-gray-50/50"
+                                            rows={2}
+                                            value={formData.reference_solution}
+                                            onChange={(e) => setFormData({ ...formData, reference_solution: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            )}
+
+                            {/* Coding Fields - Test Cases */}
+                            {formData.question_type === 'coding' && (
+                                <div className="space-y-6">
+                                    <div className="flex items-center justify-between">
+                                        <label className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Test Cases</label>
+                                        <button
+                                            type="button"
+                                            onClick={addTestCase}
+                                            className="text-[10px] font-bold text-blue-600 hover:text-blue-700 uppercase tracking-widest flex items-center gap-1.5"
+                                        >
+                                            <Plus className="w-3.5 h-3.5" />
+                                            Add Case
+                                        </button>
+                                    </div>
+
+                                    <div className="space-y-4">
+                                        {formData.test_cases.map((tc, idx) => (
+                                            <div key={idx} className="p-6 border border-gray-100 rounded-2xl bg-gray-50/30 relative group">
+                                                <div className="flex items-center justify-between mb-4">
+                                                    <span className="text-[10px] font-bold text-gray-400 uppercase">Case #{idx + 1}</span>
+                                                    {formData.test_cases.length > 1 && (
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => removeTestCase(idx)}
+                                                            className="text-[10px] font-bold text-red-400 hover:text-red-500 uppercase flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                        >
+                                                            <Trash2 className="w-3.5 h-3.5" />
+                                                            Remove
+                                                        </button>
+                                                    )}
+                                                </div>
+                                                <div className="grid grid-cols-2 gap-4">
+                                                    <div>
+                                                        <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5">Input (stdin)</label>
+                                                        <textarea
+                                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                                                            rows={2}
+                                                            placeholder="(empty for no input)"
+                                                            value={tc.input}
+                                                            onChange={(e) => handleTestCaseChange(idx, 'input', e.target.value)}
+                                                        />
+                                                    </div>
+                                                    <div>
+                                                        <label className="block text-[9px] font-bold text-gray-400 uppercase mb-1.5">Expected Output</label>
+                                                        <textarea
+                                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:ring-2 focus:ring-blue-500"
+                                                            rows={2}
+                                                            value={tc.expected_output}
+                                                            onChange={(e) => handleTestCaseChange(idx, 'expected_output', e.target.value)}
+                                                        />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        ))}
+                                    </div>
+                                </div>
+                            )}
+
+                            <div className="flex justify-end gap-3 pt-8 border-t sticky bottom-0 bg-white pb-2">
+                                <button type="button" onClick={() => { setIsModalOpen(false); setEditingQuestion(null); }} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
+                                <button type="submit" className="px-10 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all font-bold">
+                                    {editingQuestion ? 'Update' : 'Create'} Question
                                 </button>
                             </div>
                         </form>

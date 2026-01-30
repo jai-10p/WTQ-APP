@@ -5,7 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import { CountdownTimer } from '@/components/CountdownTimer';
 import { QuestionPalette } from '@/components/QuestionPalette';
 import { QuestionCard } from '@/components/QuestionCard';
-import { ChevronRight, ChevronLeft, AlertTriangle, Loader2 } from 'lucide-react';
+import { ChevronRight, ChevronLeft, AlertTriangle, Loader2, CheckCircle, Sparkles } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/context/ToastContext';
 
@@ -23,6 +23,7 @@ export default function ExamPage() {
     const [remainingTime, setRemainingTime] = useState(0);
     const [loading, setLoading] = useState(true);
     const [submitting, setSubmitting] = useState(false);
+    const [showSuccessOverlay, setShowSuccessOverlay] = useState(false);
 
     useEffect(() => {
         if (attemptId) {
@@ -124,8 +125,10 @@ export default function ExamPage() {
         try {
             setSubmitting(true);
             await api.post(`/student/attempts/${attemptId}/submit`);
-            showToast("Exam submitted successfully!", 'success');
-            router.push('/dashboard/student/results');
+            setShowSuccessOverlay(true);
+            setTimeout(() => {
+                router.push('/dashboard/student/exams');
+            }, 3500);
         } catch (error: any) {
             showToast(error.response?.data?.message || 'Failed to submit exam', 'error');
         } finally {
@@ -137,8 +140,10 @@ export default function ExamPage() {
         const autoSubmit = async () => {
             try {
                 await api.post(`/student/attempts/${attemptId}/submit`);
-                showToast("Time is up! Your exam has been submitted automatically.", 'warning');
-                router.push('/dashboard/student/results');
+                setShowSuccessOverlay(true);
+                setTimeout(() => {
+                    router.push('/dashboard/student/exams');
+                }, 3500);
             } catch (error) {
                 console.error('Auto-submit failed:', error);
                 router.push('/dashboard/student/exams');
@@ -174,7 +179,24 @@ export default function ExamPage() {
         .filter((idx) => idx !== -1);
 
     return (
-        <div className="flex h-screen flex-col bg-gray-50">
+        <div className="flex h-screen flex-col bg-gray-50 relative">
+            {showSuccessOverlay && (
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-green-600/90 backdrop-blur-md animate-in fade-in duration-500">
+                    <div className="text-center text-white scale-in-center animate-in zoom-in duration-500">
+                        <div className="bg-white/20 p-8 rounded-full inline-block mb-8 relative">
+                            <CheckCircle className="w-24 h-24 text-white" />
+                            <Sparkles className="absolute -top-4 -right-4 w-10 h-10 text-yellow-300 animate-pulse" />
+                        </div>
+                        <h1 className="text-5xl font-black mb-4 tracking-tight">EXAM SUBMITTED!</h1>
+                        <p className="text-2xl font-bold opacity-90 mb-8 uppercase tracking-[0.2em]">Great Work! GOOD LUCK.</p>
+                        <div className="flex items-center justify-center gap-2 text-white/70 font-medium text-lg">
+                            <Loader2 className="w-5 h-5 animate-spin" />
+                            Redirecting to your dashboard...
+                        </div>
+                    </div>
+                </div>
+            )}
+
             <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm z-10">
                 <div className="flex items-center gap-4">
                     <h1 className="text-xl font-bold text-gray-900">{examTitle}</h1>

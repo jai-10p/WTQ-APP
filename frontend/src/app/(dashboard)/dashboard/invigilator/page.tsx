@@ -42,30 +42,18 @@ export default function InvigilatorDashboard() {
                 <p className="text-gray-500 dark:text-zinc-400 mt-1">Manage your exams and students from here.</p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6 mb-8 max-w-2xl">
                 <StatsCard
-                    title="My Exams"
+                    title="Designation Exams"
                     value={stats?.myExams || "0"}
                     icon={FileText}
                     color="blue"
                 />
                 <StatsCard
-                    title="Total Attempts"
+                    title="Total Student Attempts"
                     value={stats?.totalAttemptsOnMyExams || "0"}
                     icon={Users}
                     color="green"
-                />
-                <StatsCard
-                    title="My Questions"
-                    value={stats?.myQuestions || "0"}
-                    icon={ClipboardList}
-                    color="purple"
-                />
-                <StatsCard
-                    title="Avg Student Score"
-                    value="--%"
-                    icon={Clock}
-                    color="orange"
                 />
             </div>
 

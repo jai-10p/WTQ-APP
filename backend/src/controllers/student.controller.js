@@ -598,7 +598,25 @@ const getResultBreakdown = async (attemptId, transaction = null) => {
                             testCases
                         );
                         isCorrect = result.allPassed;
+                        const scorePercentage = result.passed / result.total;
+                        const obtainedScore = weightage * scorePercentage;
+
                         displayAnswer = `[${ans.metadata.selected_language.toUpperCase()}] ${ans.answer_text}\n\n--- Test Results: ${result.passed}/${result.total} passed ---`;
+
+                        breakdown.push({
+                            question_id: question.id,
+                            exam_question_id: ans.exam_question_id,
+                            question_text: question.question_text,
+                            question_type: question.question_type,
+                            selected_option: displayAnswer,
+                            correct_option: `Test Cases:\n${testCases.map((tc, i) =>
+                                `${i + 1}. Input: ${tc.input || '(none)'} → Expected: ${tc.expected_output}`
+                            ).join('\n')}`,
+                            is_correct: isCorrect,
+                            weightage: weightage,
+                            score: obtainedScore
+                        });
+                        continue; // Skip the default push
                     }
                 } catch (e) {
                     isCorrect = false;
@@ -610,16 +628,6 @@ const getResultBreakdown = async (attemptId, transaction = null) => {
         if (question.question_type === 'mcq' || question.question_type === 'statement') {
             const correct = (ans.exam_question.question.options || []).find(o => o.is_correct);
             correctOption = correct ? correct.option_text : 'N/A';
-        } else if (question.question_type === 'coding') {
-            try {
-                const config = JSON.parse(question.reference_solution);
-                const testCases = config.test_cases || [];
-                correctOption = `Test Cases:\n${testCases.map((tc, i) =>
-                    `${i + 1}. Input: ${tc.input || '(none)'} → Expected: ${tc.expected_output}`
-                ).join('\n')}`;
-            } catch (e) {
-                correctOption = 'Error parsing test cases';
-            }
         }
 
         breakdown.push({
@@ -705,7 +713,7 @@ const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
         try {
             if (schema) {
                 // SANDBOX TRICK: Convert all CREATE TABLE to CREATE TEMPORARY TABLE
-                const sandboxSchema = schema.replace(/\bCREATE\s+(?:TEMPORARY\s+)?TABLE\b/gi, 'CREATE TEMPORARY TABLE');
+                const sandboxSchema = schema.replace(/\bCREATE\s+(?:TEMPORARY\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`"']?)([a-zA-Z0-9_]+)\1/gi, 'DROP TEMPORARY TABLE IF EXISTS $1$2$1; CREATE TEMPORARY TABLE $1$2$1');
                 const statements = sandboxSchema.split(';').filter(s => s.trim());
                 for (const s of statements) await sequelize.query(s, { transaction });
             }

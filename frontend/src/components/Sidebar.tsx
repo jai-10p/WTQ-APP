@@ -12,7 +12,6 @@ import {
     LogOut,
     GraduationCap,
     ClipboardList,
-    Tag
 } from 'lucide-react';
 import clsx from 'clsx';
 
@@ -25,7 +24,7 @@ export function Sidebar() {
     const menus = {
         admin: [
             { name: 'Dashboard', href: '/dashboard/super-admin', icon: LayoutDashboard },
-            { name: 'Users', href: '/dashboard/super-admin/users', icon: Users },
+            { name: 'User Management', href: '/dashboard/super-admin/users', icon: Users },
             { name: 'Settings', href: '/dashboard/settings', icon: Settings },
         ],
         invigilator: [
@@ -35,13 +34,11 @@ export function Sidebar() {
             { name: 'Settings', href: '/dashboard/settings', icon: Settings },
         ],
         student: [
-            { name: 'Dashboard', href: '/dashboard/student', icon: LayoutDashboard },
             { name: 'My Exams', href: '/dashboard/student/exams', icon: BookOpen },
-            { name: 'Results', href: '/dashboard/student/results', icon: GraduationCap },
         ],
     };
 
-    const currentMenu = menus[user.role as keyof typeof menus] || [];
+    const currentMenu = (menus as any)[user.role] || [];
 
     return (
         <aside className="w-64 bg-white dark:bg-zinc-900 border-r border-gray-200 dark:border-zinc-800 flex flex-col h-screen fixed left-0 top-0 z-30 transition-colors">
@@ -61,7 +58,7 @@ export function Sidebar() {
                     </p>
                 </div>
 
-                {currentMenu.map((item) => {
+                {currentMenu.map((item: any) => {
                     const isActive = pathname === item.href;
                     return (
                         <Link

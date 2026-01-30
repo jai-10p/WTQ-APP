@@ -49,24 +49,6 @@ export default function SuperAdminDashboard() {
                     icon={Users}
                     color="blue"
                 />
-                <StatsCard
-                    title="Total Exams"
-                    value={stats?.totalExams || "0"}
-                    icon={BookOpen}
-                    color="green"
-                />
-                <StatsCard
-                    title="Total Questions"
-                    value={stats?.totalQuestions || "0"}
-                    icon={HelpCircle}
-                    color="purple"
-                />
-                <StatsCard
-                    title="Total Attempts"
-                    value={stats?.totalAttempts || "0"}
-                    icon={Activity}
-                    color="orange"
-                />
             </div>
 
             <div className="grid grid-cols-1 gap-6">

@@ -1,13 +1,12 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams } from 'next/navigation';
 import {
     ChevronLeft,
     Users,
     Trophy,
     Search,
-    Filter,
     Download,
     Loader2,
     CheckCircle2,
@@ -23,13 +22,14 @@ import clsx from 'clsx';
 export default function ExamAttemptsPage() {
     const params = useParams();
     const examId = params.id;
-    const router = useRouter();
     const { showToast } = useToast();
 
     const [exam, setExam] = useState<any>(null);
     const [attempts, setAttempts] = useState<any[]>([]);
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
+    const [statusFilter, setStatusFilter] = useState('all');
+    const [designationFilter, setDesignationFilter] = useState('all');
 
     useEffect(() => {
         if (examId) {
@@ -55,16 +55,54 @@ export default function ExamAttemptsPage() {
         }
     };
 
-    const filteredAttempts = attempts.filter(attempt =>
-        attempt.student?.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        attempt.student?.email.toLowerCase().includes(searchTerm.toLowerCase())
-    );
+    const filteredAttempts = attempts.filter(attempt => {
+        const matchesSearch =
+            attempt.student?.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
+            attempt.student?.email.toLowerCase().includes(searchTerm.toLowerCase());
+
+        const matchesStatus = statusFilter === 'all' ||
+            (statusFilter === 'passed' ? attempt.result?.is_passed : !attempt.result?.is_passed);
+
+        const matchesDesignation = designationFilter === 'all' ||
+            attempt.student?.designation === designationFilter;
+
+        return matchesSearch && matchesStatus && matchesDesignation;
+    });
+
+    const exportToCSV = () => {
+        const headers = ['Rank', 'Username', 'Email', 'Designation', 'Score (%)', 'Points', 'Status', 'Date'];
+        const csvRows = filteredAttempts.map((attempt, index) => [
+            index + 1,
+            attempt.student?.username,
+            attempt.student?.email,
+            attempt.student?.designation || 'N/A',
+            attempt.result?.percentage,
+            `${attempt.result?.total_score}/${attempt.result?.max_score}`,
+            attempt.result?.is_passed ? 'Passed' : 'Failed',
+            new Date(attempt.submitted_at).toLocaleDateString()
+        ]);
+
+        const csvContent = [
+            headers.join(','),
+            ...csvRows.map(row => row.join(','))
+        ].join('\n');
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement('a');
+        const url = URL.createObjectURL(blob);
+        link.setAttribute('href', url);
+        link.setAttribute('download', `results_${exam?.exam_title.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.csv`);
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    };
 
     if (loading) {
         return (
             <div className="h-[60vh] flex flex-col items-center justify-center">
                 <Loader2 className="w-10 h-10 animate-spin text-green-600 mb-4" />
-                <p className="text-gray-500 font-medium">Loading student attempts...</p>
+                <p className="text-gray-500 font-medium tracking-tight">Loading exam results...</p>
             </div>
         );
     }
@@ -82,44 +120,65 @@ export default function ExamAttemptsPage() {
                     <div>
                         <h1 className="text-2xl font-bold text-gray-900">Exam Results</h1>
                         <p className="text-gray-500 mt-1">
-                            Viewing attempts for <span className="text-green-600 font-semibold">{exam?.exam_title}</span>
+                            Exam: <span className="text-green-600 font-bold">{exam?.exam_title}</span>
                         </p>
                     </div>
                 </div>
 
                 <div className="flex gap-3">
-                    <div className="bg-white border rounded-lg px-4 py-2 flex items-center gap-2 shadow-sm">
+                    <div className="bg-white border border-gray-100 rounded-xl px-4 py-2 flex items-center gap-2 shadow-sm">
                         <Users className="w-4 h-4 text-blue-500" />
-                        <span className="text-sm font-semibold">{attempts.length} Attempts</span>
+                        <span className="text-sm font-bold text-gray-700">{attempts.length} Finished</span>
                     </div>
-                    <div className="bg-white border rounded-lg px-4 py-2 flex items-center gap-2 shadow-sm">
+                    <div className="bg-white border border-gray-100 rounded-xl px-4 py-2 flex items-center gap-2 shadow-sm">
                         <Trophy className="w-4 h-4 text-yellow-500" />
-                        <span className="text-sm font-semibold">
-                            {attempts.filter(a => a.result?.is_passed).length} Passed
+                        <span className="text-sm font-bold text-gray-700">
+                            {attempts.filter(a => a.result?.is_passed).length} Qualified
                         </span>
                     </div>
                 </div>
             </div>
 
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 overflow-hidden">
-                <div className="p-4 border-b border-gray-100 flex flex-col sm:flex-row gap-4 items-center justify-between bg-gray-50/50">
-                    <div className="relative flex-1 max-w-md w-full">
-                        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                        <input
-                            type="text"
-                            placeholder="Search by student name..."
-                            className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm bg-white"
-                            value={searchTerm}
-                            onChange={(e) => setSearchTerm(e.target.value)}
-                        />
+                <div className="p-4 border-b border-gray-100 flex flex-wrap gap-4 items-center justify-between bg-gray-50/50">
+                    <div className="flex flex-wrap items-center gap-4 flex-1">
+                        <div className="relative min-w-[280px]">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+                            <input
+                                type="text"
+                                placeholder="Search students..."
+                                className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:ring-2 focus:ring-green-500 outline-none text-sm bg-white font-medium"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                            />
+                        </div>
+                        <select
+                            className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500 font-bold text-gray-600"
+                            value={statusFilter}
+                            onChange={(e) => setStatusFilter(e.target.value)}
+                        >
+                            <option value="all">All Status</option>
+                            <option value="passed">Passed</option>
+                            <option value="failed">Failed</option>
+                        </select>
+                        <select
+                            className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500 font-bold text-gray-600"
+                            value={designationFilter}
+                            onChange={(e) => setDesignationFilter(e.target.value)}
+                        >
+                            <option value="all">All Designations</option>
+                            <option value="QA">QA</option>
+                            <option value="DEV">DEV</option>
+                            <option value="UI/UX">UI/UX</option>
+                        </select>
                     </div>
 
                     <button
-                        onClick={() => showToast('Export feature coming soon!', 'info')}
-                        className="flex items-center gap-2 text-gray-600 hover:text-green-600 px-3 py-2 rounded-lg hover:bg-green-50 transition-colors text-sm font-medium"
+                        onClick={exportToCSV}
+                        className="flex items-center gap-2 bg-white border border-gray-200 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-50 transition-colors text-sm font-bold shadow-sm"
                     >
                         <Download className="w-4 h-4" />
-                        Export results
+                        Export CSV
                     </button>
                 </div>
 
@@ -127,46 +186,44 @@ export default function ExamAttemptsPage() {
                     <table className="w-full text-left">
                         <thead className="bg-gray-50 border-b border-gray-100">
                             <tr>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Rank</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider">Student</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Score</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-center">Status</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Attempt Date</th>
-                                <th className="px-6 py-4 text-xs font-bold text-gray-500 uppercase tracking-wider text-right">Actions</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Rank</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest">Student</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Performance</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-center">Status</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Submitted</th>
+                                <th className="px-6 py-4 text-[10px] font-bold text-gray-400 uppercase tracking-widest text-right">Actions</th>
                             </tr>
                         </thead>
                         <tbody className="divide-y divide-gray-100">
                             {filteredAttempts.length === 0 ? (
                                 <tr>
-                                    <td colSpan={6} className="px-6 py-12 text-center text-gray-500">
-                                        <div className="flex flex-col items-center justify-center">
-                                            <UserCheck className="w-12 h-12 text-gray-200 mb-3" />
-                                            <p>No attempts found for this exam.</p>
-                                        </div>
+                                    <td colSpan={6} className="px-6 py-20 text-center text-gray-400 font-medium">
+                                        <UserCheck className="w-12 h-12 text-gray-100 mx-auto mb-3" />
+                                        No results match your current filters.
                                     </td>
                                 </tr>
                             ) : (
                                 filteredAttempts.map((attempt, index) => (
-                                    <tr key={attempt.id} className="hover:bg-gray-50/50 transition-colors">
+                                    <tr key={attempt.id} className="hover:bg-gray-50/50 transition-colors group">
                                         <td className="px-6 py-4">
                                             <div className={clsx(
-                                                "w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm",
-                                                index === 0 ? "bg-yellow-100 text-yellow-700 ring-2 ring-yellow-400" :
-                                                    index === 1 ? "bg-gray-100 text-gray-700 ring-2 ring-gray-400" :
-                                                        index === 2 ? "bg-orange-100 text-orange-700 ring-2 ring-orange-400" :
-                                                            "text-gray-400"
+                                                "w-8 h-8 rounded-lg flex items-center justify-center font-bold text-xs mx-auto",
+                                                index === 0 ? "bg-yellow-50 text-yellow-600 border border-yellow-200" :
+                                                    index === 1 ? "bg-slate-50 text-slate-500 border border-slate-200" :
+                                                        index === 2 ? "bg-orange-50 text-orange-600 border border-orange-200" :
+                                                            "text-gray-400 border border-transparent"
                                             )}>
                                                 {index + 1}
                                             </div>
                                         </td>
                                         <td className="px-6 py-4">
                                             <div className="flex items-center gap-3">
-                                                <div className="w-9 h-9 rounded-full bg-green-100 flex items-center justify-center text-green-700 font-bold text-xs uppercase">
+                                                <div className="w-10 h-10 rounded-full bg-green-50 border border-green-100 flex items-center justify-center text-green-700 font-bold text-xs uppercase shadow-sm">
                                                     {attempt.student?.username.substring(0, 2)}
                                                 </div>
                                                 <div>
-                                                    <p className="text-sm font-semibold text-gray-900">{attempt.student?.username}</p>
-                                                    <p className="text-[11px] text-gray-500">{attempt.student?.email} • {attempt.student?.designation || 'No Designation'}</p>
+                                                    <p className="text-sm font-bold text-gray-900">{attempt.student?.username}</p>
+                                                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-tight">{attempt.student?.designation || 'General'}</p>
                                                 </div>
                                             </div>
                                         </td>
@@ -178,30 +235,25 @@ export default function ExamAttemptsPage() {
                                                 )}>
                                                     {attempt.result?.percentage}%
                                                 </span>
-                                                <span className="text-[10px] text-gray-400 font-medium">
-                                                    {attempt.result?.total_score} / {attempt.result?.max_score}
+                                                <span className="text-[10px] text-gray-400 font-bold">
+                                                    {attempt.result?.total_score} / {attempt.result?.max_score} Pts
                                                 </span>
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
                                             <span className={clsx(
-                                                "inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-bold uppercase tracking-wide",
-                                                attempt.result?.is_passed ? "bg-green-100 text-green-700" : "bg-red-100 text-red-700"
+                                                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                                                attempt.result?.is_passed ? "bg-green-50 text-green-700 border border-green-100" : "bg-red-50 text-red-700 border border-red-100"
                                             )}>
-                                                {attempt.result?.is_passed ? (
-                                                    <><CheckCircle2 className="w-3 h-3" /> Passed</>
-                                                ) : (
-                                                    <><XCircle className="w-3 h-3" /> Failed</>
-                                                )}
+                                                {attempt.result?.is_passed ? "Pass" : "Fail"}
                                             </span>
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex flex-col items-end">
-                                                <div className="flex items-center gap-1.5 text-xs text-gray-700 font-medium">
-                                                    <Clock className="w-3 h-3 text-gray-400" />
+                                                <div className="flex items-center gap-1.5 text-xs text-gray-900 font-bold">
                                                     {new Date(attempt.submitted_at).toLocaleDateString()}
                                                 </div>
-                                                <div className="text-[10px] text-gray-400">
+                                                <div className="text-[10px] text-gray-400 font-medium">
                                                     {new Date(attempt.submitted_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                                                 </div>
                                             </div>
@@ -209,9 +261,9 @@ export default function ExamAttemptsPage() {
                                         <td className="px-6 py-4 text-right">
                                             <Link
                                                 href={`/dashboard/student/results/${attempt.id}`}
-                                                className="inline-flex items-center gap-2 text-xs font-bold text-green-600 hover:text-green-700 bg-green-50 hover:bg-green-100 px-3 py-1.5 rounded-lg transition-all"
+                                                className="inline-flex items-center gap-2 text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 border border-blue-100 px-3 py-2 rounded-lg transition-all uppercase tracking-widest"
                                             >
-                                                View Report
+                                                Full Report
                                             </Link>
                                         </td>
                                     </tr>

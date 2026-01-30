@@ -129,8 +129,12 @@ export function QuestionCard({
     // Handle language change
     const handleLanguageChange = (lang: string) => {
         onMetadataChange?.({ ...metadata, selected_language: lang });
-        // Set starter code if answer is empty
-        if (!sqlAnswer.trim()) {
+
+        // If current code is empty or matches ANY of the standard starter templates, replace it
+        // This allows cycling through languages without leaving old templates behind
+        const isDefaultTemplate = !sqlAnswer.trim() || Object.values(STARTER_CODE).some(code => code.trim() === sqlAnswer.trim());
+
+        if (isDefaultTemplate) {
             onSqlChange?.(STARTER_CODE[lang] || '');
         }
     };

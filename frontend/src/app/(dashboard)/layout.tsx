@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Sidebar } from '@/components/Sidebar';
 
-import { ThemeToggle } from '@/components/ThemeToggle';
+
 import Image from 'next/image';
 
 export default function DashboardLayout({
@@ -37,10 +37,9 @@ export default function DashboardLayout({
             <div className="flex-1 ml-64 flex flex-col min-h-screen">
                 <header className="flex justify-end items-center p-4 pr-8 pt-6">
                     <div className="flex items-center gap-2">
-                        <span className="text-sm text-gray-500 dark:text-zinc-400 font-medium mr-2">
+                        <span className="text-sm text-gray-500 font-medium mr-2">
                             {user?.username}
                         </span>
-                        <ThemeToggle />
                     </div>
                 </header>
 
