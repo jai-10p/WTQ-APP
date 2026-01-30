@@ -15,6 +15,7 @@ const studentRoutes = require('./student.routes');
 const authRoutes = require('./auth.routes');
 const userRoutes = require('./user.routes');
 const dashboardRoutes = require('./dashboard.routes');
+const codeRoutes = require('./code.routes');
 
 // Mount routes
 router.use('/auth', authRoutes);
@@ -25,6 +26,7 @@ router.use('/questions', questionRoutes);
 router.use('/student', studentRoutes);
 router.use('/users', userRoutes);
 router.use('/dashboard', dashboardRoutes);
+router.use('/code', codeRoutes);
 
 // API info endpoint
 router.get('/', (req, res) => {

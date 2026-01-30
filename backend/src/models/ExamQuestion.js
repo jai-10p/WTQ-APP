@@ -28,7 +28,7 @@ const ExamQuestion = sequelize.define('exam_questions', {
             model: 'questions',
             key: 'id',
         },
-        onDelete: 'RESTRICT',
+        onDelete: 'CASCADE',
     },
     question_order: {
         type: DataTypes.INTEGER.UNSIGNED,

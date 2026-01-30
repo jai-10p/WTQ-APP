@@ -47,19 +47,19 @@ const Question = sequelize.define('questions', {
         },
     },
     question_type: {
-        type: DataTypes.ENUM('mcq', 'sql'),
+        type: DataTypes.ENUM('mcq', 'sql', 'output', 'statement', 'coding'),
         allowNull: false,
         defaultValue: 'mcq'
     },
     reference_solution: {
         type: DataTypes.TEXT,
         allowNull: true,
-        comment: 'The correct SQL query for SQL type questions'
+        comment: 'For SQL: the query. For Output/Statement: correct answer. For Coding: JSON map of lang:solution.'
     },
     database_schema: {
         type: DataTypes.TEXT,
         allowNull: true,
-        comment: 'SQL to setup the database environment for this question'
+        comment: 'For SQL: setup SQL. For Output: the code snippet to display.'
     },
     is_active: {
         type: DataTypes.BOOLEAN,

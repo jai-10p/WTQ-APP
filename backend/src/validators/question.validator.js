@@ -16,8 +16,8 @@ const createQuestionValidator = [
         .withMessage('Question text is required'),
     body('question_type')
         .optional()
-        .isIn(['mcq', 'sql'])
-        .withMessage('Question type must be mcq or sql'),
+        .isIn(['mcq', 'sql', 'output', 'statement', 'coding'])
+        .withMessage('Question type must be mcq, sql, output, statement, or coding'),
     body('image_url')
         .optional()
         .trim()
@@ -32,24 +32,24 @@ const createQuestionValidator = [
         .isFloat({ min: 0.01 })
         .withMessage('Weightage must be greater than 0'),
     body('reference_solution')
-        .if(body('question_type').equals('sql'))
+        .if(body('question_type').isIn(['sql', 'output', 'statement', 'coding']))
         .trim()
         .notEmpty()
-        .withMessage('Reference solution is required for SQL questions'),
+        .withMessage('Reference solution is required for this question type'),
     body('database_schema')
         .optional()
         .trim(),
     body('options')
-        .if(body('question_type').not().equals('sql'))
+        .if(body('question_type').isIn(['mcq', 'statement']))
         .isArray({ min: 2 })
-        .withMessage('At least 2 options are required for MCQ questions'),
+        .withMessage('At least 2 options are required for this question type'),
     body('options.*.option_text')
-        .if(body('question_type').not().equals('sql'))
+        .if(body('question_type').isIn(['mcq', 'statement']))
         .trim()
         .notEmpty()
         .withMessage('Option text is required'),
     body('options.*.is_correct')
-        .if(body('question_type').not().equals('sql'))
+        .if(body('question_type').isIn(['mcq', 'statement']))
         .isBoolean()
         .withMessage('is_correct must be a boolean'),
     body('options.*.display_order')
@@ -70,8 +70,8 @@ const updateQuestionValidator = [
         .withMessage('Question text cannot be empty'),
     body('question_type')
         .optional()
-        .isIn(['mcq', 'sql'])
-        .withMessage('Question type must be mcq or sql'),
+        .isIn(['mcq', 'sql', 'output', 'statement', 'coding'])
+        .withMessage('Question type must be mcq, sql, output, statement, or coding'),
     body('image_url')
         .optional()
         .trim()

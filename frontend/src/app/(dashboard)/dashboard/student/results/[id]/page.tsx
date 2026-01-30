@@ -142,8 +142,8 @@ export default function ResultDetailPage() {
                                                 Your Answer:
                                             </span>
                                         </div>
-                                        {item.question_type === 'sql' ? (
-                                            <div className="mt-2 font-mono text-xs p-3 bg-gray-900 text-green-400 rounded-lg overflow-x-auto whitespace-pre">
+                                        {item.question_type === 'sql' || item.question_type === 'output' || item.question_type === 'coding' ? (
+                                            <div className="mt-2 font-mono text-xs p-3 bg-gray-900 text-emerald-400 rounded-lg overflow-x-auto whitespace-pre border border-gray-800 shadow-inner">
                                                 {item.selected_option}
                                             </div>
                                         ) : (

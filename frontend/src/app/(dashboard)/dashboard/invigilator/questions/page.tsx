@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { Plus, Search, Filter, MoreVertical, Edit, Trash2, HelpCircle, Loader2, CheckCircle2, XCircle } from 'lucide-react';
+import { Plus, Search, Filter, MoreVertical, Edit, Trash2, HelpCircle, Loader2, CheckCircle2, XCircle, Database, Play, Terminal, Code2 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
@@ -65,9 +65,23 @@ export default function QuestionsPage() {
             return;
         }
 
-        if (formData.question_type === 'sql' && !formData.reference_solution.trim()) {
+        if ((formData.question_type === 'sql' || formData.question_type === 'output') && !formData.reference_solution.trim()) {
             showToast('Please provide a reference solution', 'warning');
             return;
+        }
+
+        if (formData.question_type === 'coding') {
+            try {
+                const config = JSON.parse(formData.reference_solution || '{}');
+                const testCases = config.test_cases || [];
+                if (testCases.length === 0 || !testCases.some((tc: any) => tc.expected_output?.trim())) {
+                    showToast('Please add at least one test case with expected output', 'warning');
+                    return;
+                }
+            } catch (e) {
+                showToast('Invalid test case format', 'error');
+                return;
+            }
         }
 
         try {
@@ -102,6 +116,34 @@ export default function QuestionsPage() {
                 { option_text: '', is_correct: false, display_order: 4 },
             ]
         });
+    };
+
+    const handleTypeChange = (type: string) => {
+        const newData = { ...formData, question_type: type };
+
+        // Auto-configure options for statement questions
+        if (type === 'statement') {
+            newData.options = [
+                { option_text: 'True', is_correct: true, display_order: 1 },
+                { option_text: 'False', is_correct: false, display_order: 2 }
+            ];
+        } else if (type === 'coding') {
+            newData.reference_solution = JSON.stringify({
+                test_cases: [
+                    { input: '', expected_output: '' }
+                ]
+            });
+            newData.options = [];
+        } else if (type === 'mcq' && formData.options.length < 3) {
+            newData.options = [
+                { option_text: '', is_correct: true, display_order: 1 },
+                { option_text: '', is_correct: false, display_order: 2 },
+                { option_text: '', is_correct: false, display_order: 3 },
+                { option_text: '', is_correct: false, display_order: 4 },
+            ];
+        }
+
+        setFormData(newData);
     };
 
     const handleEditClick = (q: any) => {
@@ -184,7 +226,7 @@ export default function QuestionsPage() {
                             <tr>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Question</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Difficulty</th>
-                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Options</th>
+                                <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider">Type / Info</th>
                                 <th className="px-6 py-4 text-xs font-semibold text-gray-500 uppercase tracking-wider text-right">Actions</th>
                             </tr>
                         </thead>
@@ -225,9 +267,24 @@ export default function QuestionsPage() {
                                         </td>
                                         <td className="px-6 py-4">
                                             {q.question_type === 'sql' ? (
-                                                <div className="flex items-center gap-2 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded w-fit">
-                                                    <Loader2 className="w-3 h-3" />
+                                                <div className="flex items-center gap-2 text-xs font-medium text-blue-600 bg-blue-50 px-2 py-1 rounded w-fit border border-blue-100">
+                                                    <Database className="w-3 h-3" />
                                                     SQL Query
+                                                </div>
+                                            ) : q.question_type === 'output' ? (
+                                                <div className="flex items-center gap-2 text-xs font-medium text-purple-600 bg-purple-50 px-2 py-1 rounded w-fit border border-purple-100">
+                                                    <Play className="w-3 h-3" />
+                                                    Output
+                                                </div>
+                                            ) : q.question_type === 'statement' ? (
+                                                <div className="flex items-center gap-2 text-xs font-medium text-amber-600 bg-amber-50 px-2 py-1 rounded w-fit border border-amber-100">
+                                                    <CheckCircle2 className="w-3 h-3" />
+                                                    Statement
+                                                </div>
+                                            ) : q.question_type === 'coding' ? (
+                                                <div className="flex items-center gap-2 text-xs font-medium text-emerald-600 bg-emerald-50 px-2 py-1 rounded w-fit border border-emerald-100">
+                                                    <Terminal className="w-3 h-3" />
+                                                    Coding
                                                 </div>
                                             ) : (
                                                 <>
@@ -313,25 +370,24 @@ export default function QuestionsPage() {
                                     </div>
                                     <div className="col-span-2">
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Question Type</label>
-                                        <div className="flex gap-4">
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    checked={formData.question_type === 'mcq'}
-                                                    onChange={() => setFormData({ ...formData, question_type: 'mcq' })}
-                                                    className="w-4 h-4 text-blue-600"
-                                                />
-                                                <span className="text-sm">Multiple Choice</span>
-                                            </label>
-                                            <label className="flex items-center gap-2 cursor-pointer">
-                                                <input
-                                                    type="radio"
-                                                    checked={formData.question_type === 'sql'}
-                                                    onChange={() => setFormData({ ...formData, question_type: 'sql' })}
-                                                    className="w-4 h-4 text-blue-600"
-                                                />
-                                                <span className="text-sm">SQL Query</span>
-                                            </label>
+                                        <div className="flex flex-wrap gap-4">
+                                            {[
+                                                { id: 'mcq', label: 'MCQ' },
+                                                { id: 'sql', label: 'SQL Query' },
+                                                { id: 'output', label: 'Output Prediction' },
+                                                { id: 'statement', label: 'Statement (T/F)' },
+                                                { id: 'coding', label: 'Coding (Polyglot)' }
+                                            ].map(type => (
+                                                <label key={type.id} className="flex items-center gap-2 cursor-pointer">
+                                                    <input
+                                                        type="radio"
+                                                        checked={formData.question_type === type.id}
+                                                        onChange={() => handleTypeChange(type.id)}
+                                                        className="w-4 h-4 text-blue-600"
+                                                    />
+                                                    <span className="text-sm">{type.label}</span>
+                                                </label>
+                                            ))}
                                         </div>
                                     </div>
                                 </div>
@@ -348,9 +404,11 @@ export default function QuestionsPage() {
                                 />
                             </div>
 
-                            {formData.question_type === 'mcq' ? (
+                            {formData.question_type === 'mcq' || formData.question_type === 'statement' ? (
                                 <div className="space-y-4">
-                                    <label className="block text-sm font-medium text-gray-700">Options (Mark the correct answer)</label>
+                                    <label className="block text-sm font-medium text-gray-700">
+                                        {formData.question_type === 'statement' ? 'Options (Mark True or False)' : 'Options (Mark the correct answer)'}
+                                    </label>
                                     {formData.options.map((opt, index) => (
                                         <div key={index} className="flex items-center gap-3">
                                             <input
@@ -364,7 +422,8 @@ export default function QuestionsPage() {
                                                 type="text"
                                                 required
                                                 placeholder={`Option ${index + 1}`}
-                                                className="flex-1 border border-gray-200 rounded-lg px-3 py-2 outline-none"
+                                                readOnly={formData.question_type === 'statement'}
+                                                className={`flex-1 border border-gray-200 rounded-lg px-3 py-2 outline-none ${formData.question_type === 'statement' ? 'bg-gray-50' : ''}`}
                                                 value={opt.option_text}
                                                 onChange={(e) => handleOptionChange(index, 'option_text', e.target.value)}
                                             />
@@ -376,7 +435,7 @@ export default function QuestionsPage() {
                                         </div>
                                     ))}
                                 </div>
-                            ) : (
+                            ) : formData.question_type === 'sql' ? (
                                 <div className="space-y-4">
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Database Schema (Initial SQL)</label>
@@ -395,6 +454,112 @@ export default function QuestionsPage() {
                                             required
                                             className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[100px]"
                                             placeholder="SELECT * FROM City WHERE Population > 100000;"
+                                            value={formData.reference_solution}
+                                            onChange={(e) => setFormData({ ...formData, reference_solution: e.target.value })}
+                                        />
+                                    </div>
+                                </div>
+                            ) : formData.question_type === 'coding' ? (
+                                <div className="space-y-4">
+                                    <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-4">
+                                        <h4 className="text-sm font-bold text-emerald-800 mb-2">🚀 Real Code Execution</h4>
+                                        <p className="text-xs text-emerald-700">Student code will be executed against these test cases. Their code must produce the expected output for each test.</p>
+                                    </div>
+
+                                    <label className="block text-sm font-medium text-gray-700">Test Cases</label>
+                                    <p className="text-xs text-gray-500 mb-2">Add input/output test cases. Leave input empty for programs that don't require input.</p>
+
+                                    {(() => {
+                                        let testCases: Array<{ input: string, expected_output: string }> = [];
+                                        try {
+                                            const config = JSON.parse(formData.reference_solution || '{}');
+                                            testCases = config.test_cases || [];
+                                        } catch (e) { testCases = []; }
+
+                                        return (
+                                            <div className="space-y-3">
+                                                {testCases.map((tc, idx) => (
+                                                    <div key={idx} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                                                        <div className="flex items-center justify-between mb-3">
+                                                            <span className="text-xs font-bold text-gray-500 uppercase">Test Case #{idx + 1}</span>
+                                                            <button
+                                                                type="button"
+                                                                onClick={() => {
+                                                                    const newCases = testCases.filter((_, i) => i !== idx);
+                                                                    setFormData({ ...formData, reference_solution: JSON.stringify({ test_cases: newCases }) });
+                                                                }}
+                                                                className="text-red-500 hover:text-red-700 text-xs font-medium"
+                                                            >
+                                                                Remove
+                                                            </button>
+                                                        </div>
+                                                        <div className="grid grid-cols-2 gap-3">
+                                                            <div>
+                                                                <label className="text-xs text-gray-500 mb-1 block">Input (stdin)</label>
+                                                                <textarea
+                                                                    className="w-full border border-gray-200 rounded px-2 py-1.5 font-mono text-xs focus:ring-1 focus:ring-emerald-500 outline-none min-h-[60px]"
+                                                                    placeholder="(empty for no input)"
+                                                                    value={tc.input || ''}
+                                                                    onChange={(e) => {
+                                                                        const newCases = [...testCases];
+                                                                        newCases[idx] = { ...newCases[idx], input: e.target.value };
+                                                                        setFormData({ ...formData, reference_solution: JSON.stringify({ test_cases: newCases }) });
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                            <div>
+                                                                <label className="text-xs text-gray-500 mb-1 block">Expected Output</label>
+                                                                <textarea
+                                                                    required
+                                                                    className="w-full border border-gray-200 rounded px-2 py-1.5 font-mono text-xs focus:ring-1 focus:ring-emerald-500 outline-none min-h-[60px]"
+                                                                    placeholder="Hello, World!"
+                                                                    value={tc.expected_output || ''}
+                                                                    onChange={(e) => {
+                                                                        const newCases = [...testCases];
+                                                                        newCases[idx] = { ...newCases[idx], expected_output: e.target.value };
+                                                                        setFormData({ ...formData, reference_solution: JSON.stringify({ test_cases: newCases }) });
+                                                                    }}
+                                                                />
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                ))}
+
+                                                <button
+                                                    type="button"
+                                                    onClick={() => {
+                                                        const newCases = [...testCases, { input: '', expected_output: '' }];
+                                                        setFormData({ ...formData, reference_solution: JSON.stringify({ test_cases: newCases }) });
+                                                    }}
+                                                    className="w-full border-2 border-dashed border-emerald-300 rounded-lg py-3 text-emerald-600 hover:bg-emerald-50 transition-colors font-medium text-sm flex items-center justify-center gap-2"
+                                                >
+                                                    <Plus className="w-4 h-4" />
+                                                    Add Test Case
+                                                </button>
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            ) : (
+                                <div className="space-y-4">
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Code Snippet</label>
+                                        <p className="text-xs text-gray-500 mb-2">Provide the code student needs to analyze.</p>
+                                        <textarea
+                                            required
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[120px]"
+                                            placeholder="function test() { console.log('hello'); }"
+                                            value={formData.database_schema}
+                                            onChange={(e) => setFormData({ ...formData, database_schema: e.target.value })}
+                                        />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Expected Output</label>
+                                        <p className="text-xs text-gray-500 mb-2">The exact string the student must type to get points.</p>
+                                        <textarea
+                                            required
+                                            className="w-full border border-gray-200 rounded-lg px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 outline-none min-h-[80px]"
+                                            placeholder="Enter the correct output..."
                                             value={formData.reference_solution}
                                             onChange={(e) => setFormData({ ...formData, reference_solution: e.target.value })}
                                         />

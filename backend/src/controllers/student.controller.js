@@ -4,6 +4,7 @@
  */
 
 const ApiResponse = require('../utils/apiResponse');
+const codeExecutor = require('../services/codeExecutor.service');
 const {
     Exam,
     Question,
@@ -217,7 +218,8 @@ const getAttemptQuestions = async (req, res, next) => {
                 question_weightage: parseFloat(junction.question_weightage),
                 answer: answer ? {
                     selected_option_id: answer.selected_option_id,
-                    answer_text: answer.answer_text
+                    answer_text: answer.answer_text,
+                    metadata: answer.metadata
                 } : null,
                 question: {
                     id: q.id,
@@ -316,6 +318,7 @@ const submitAnswer = async (req, res, next) => {
             await existingAnswer.update({
                 selected_option_id: selected_option_id || null,
                 answer_text: req.body.answer_text || null,
+                metadata: req.body.metadata || null,
                 answered_at: new Date()
             });
         } else {
@@ -323,7 +326,8 @@ const submitAnswer = async (req, res, next) => {
                 attempt_id: attempt.id,
                 exam_question_id: exam_question_id,
                 selected_option_id: selected_option_id || null,
-                answer_text: req.body.answer_text || null
+                answer_text: req.body.answer_text || null,
+                metadata: req.body.metadata || null
             });
         }
 
@@ -409,7 +413,7 @@ const submitExam = async (req, res, next) => {
             const question = ans.exam_question.question;
             const weightage = parseFloat(ans.exam_question.question_weightage);
 
-            if (question.question_type === 'mcq') {
+            if (question.question_type === 'mcq' || question.question_type === 'statement') {
                 if (ans.selected_option && ans.selected_option.is_correct) {
                     totalScore += weightage;
                     correctCount++;
@@ -424,6 +428,39 @@ const submitExam = async (req, res, next) => {
                     if (isCorrect) {
                         totalScore += weightage;
                         correctCount++;
+                    }
+                }
+            } else if (question.question_type === 'output') {
+                if (ans.answer_text && question.reference_solution) {
+                    const isCorrect = ans.answer_text.trim().toLowerCase() === question.reference_solution.trim().toLowerCase();
+                    if (isCorrect) {
+                        totalScore += weightage;
+                        correctCount++;
+                    }
+                }
+            } else if (question.question_type === 'coding') {
+                if (ans.answer_text && question.reference_solution && ans.metadata?.selected_language) {
+                    try {
+                        const config = JSON.parse(question.reference_solution);
+                        const testCases = config.test_cases || [];
+
+                        if (testCases.length > 0) {
+                            // Use real code execution
+                            const result = await codeExecutor.runTestCases(
+                                ans.metadata.selected_language,
+                                ans.answer_text,
+                                testCases
+                            );
+
+                            // Partial scoring: score based on percentage of tests passed
+                            const scorePercentage = result.passed / result.total;
+                            totalScore += weightage * scorePercentage;
+                            if (result.allPassed) {
+                                correctCount++;
+                            }
+                        }
+                    } catch (e) {
+                        console.error('Coding grading error:', e);
                     }
                 }
             }
@@ -506,7 +543,12 @@ const getResultBreakdown = async (attemptId, transaction = null) => {
                 include: [{
                     model: Question,
                     as: 'question',
-                    attributes: ['question_text', 'question_type', 'reference_solution', 'database_schema']
+                    attributes: ['question_text', 'question_type', 'reference_solution', 'database_schema'],
+                    include: [{
+                        model: MCQOption,
+                        as: 'options',
+                        attributes: ['option_text', 'is_correct']
+                    }]
                 }]
             },
             {
@@ -525,7 +567,7 @@ const getResultBreakdown = async (attemptId, transaction = null) => {
         let isCorrect = false;
         let displayAnswer = 'Not Answered';
 
-        if (question.question_type === 'mcq') {
+        if (question.question_type === 'mcq' || question.question_type === 'statement') {
             displayAnswer = ans.selected_option ? ans.selected_option.option_text : 'Not Answered';
             isCorrect = ans.selected_option ? ans.selected_option.is_correct : false;
         } else if (question.question_type === 'sql') {
@@ -537,6 +579,47 @@ const getResultBreakdown = async (attemptId, transaction = null) => {
                     question.database_schema
                 );
             }
+        } else if (question.question_type === 'output') {
+            displayAnswer = ans.answer_text || 'Not Answered';
+            if (ans.answer_text && question.reference_solution) {
+                isCorrect = ans.answer_text.trim().toLowerCase() === question.reference_solution.trim().toLowerCase();
+            }
+        } else if (question.question_type === 'coding') {
+            displayAnswer = ans.answer_text || 'Not Answered';
+            if (ans.answer_text && question.reference_solution && ans.metadata?.selected_language) {
+                try {
+                    const config = JSON.parse(question.reference_solution);
+                    const testCases = config.test_cases || [];
+
+                    if (testCases.length > 0) {
+                        const result = await codeExecutor.runTestCases(
+                            ans.metadata.selected_language,
+                            ans.answer_text,
+                            testCases
+                        );
+                        isCorrect = result.allPassed;
+                        displayAnswer = `[${ans.metadata.selected_language.toUpperCase()}] ${ans.answer_text}\n\n--- Test Results: ${result.passed}/${result.total} passed ---`;
+                    }
+                } catch (e) {
+                    isCorrect = false;
+                }
+            }
+        }
+
+        let correctOption = question.reference_solution;
+        if (question.question_type === 'mcq' || question.question_type === 'statement') {
+            const correct = (ans.exam_question.question.options || []).find(o => o.is_correct);
+            correctOption = correct ? correct.option_text : 'N/A';
+        } else if (question.question_type === 'coding') {
+            try {
+                const config = JSON.parse(question.reference_solution);
+                const testCases = config.test_cases || [];
+                correctOption = `Test Cases:\n${testCases.map((tc, i) =>
+                    `${i + 1}. Input: ${tc.input || '(none)'} → Expected: ${tc.expected_output}`
+                ).join('\n')}`;
+            } catch (e) {
+                correctOption = 'Error parsing test cases';
+            }
         }
 
         breakdown.push({
@@ -545,6 +628,7 @@ const getResultBreakdown = async (attemptId, transaction = null) => {
             question_text: question.question_text,
             question_type: question.question_type,
             selected_option: displayAnswer,
+            correct_option: correctOption,
             is_correct: isCorrect,
             weightage: weightage,
             score: isCorrect ? weightage : 0

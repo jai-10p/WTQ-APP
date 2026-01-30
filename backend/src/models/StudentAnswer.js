@@ -28,6 +28,7 @@ const StudentAnswer = sequelize.define('student_answers', {
             model: 'exam_questions',
             key: 'id',
         },
+        onDelete: 'CASCADE',
     },
     selected_option_id: {
         type: DataTypes.BIGINT.UNSIGNED,
@@ -39,8 +40,13 @@ const StudentAnswer = sequelize.define('student_answers', {
     },
     answer_text: {
         type: DataTypes.TEXT,
-        allowNull: true, // For SQL questions
-        comment: 'Stores the SQL query written by the student'
+        allowNull: true,
+        comment: 'Stores the SQL query, output text, or code written by the student'
+    },
+    metadata: {
+        type: DataTypes.JSON,
+        allowNull: true,
+        comment: 'Stores additional info like selected_language for coding type'
     },
     answered_at: {
         type: DataTypes.DATE,

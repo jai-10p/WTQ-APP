@@ -26,15 +26,28 @@ const createQuestion = async (req, res, next) => {
             options,
         } = req.body;
 
-        // Validate at least one correct option
-        const correctOptions = options.filter((opt) => opt.is_correct);
-        if (correctOptions.length === 0) {
-            await transaction.rollback();
-            return ApiResponse.error(
-                res,
-                'At least one option must be marked as correct',
-                400
-            );
+        const question_type = req.body.question_type || 'mcq';
+
+        // Validate at least one correct option for MCQ and Statement types
+        if (question_type === 'mcq' || question_type === 'statement') {
+            if (!options || !Array.isArray(options) || options.length === 0) {
+                await transaction.rollback();
+                return ApiResponse.error(
+                    res,
+                    'At least two options are required for this question type',
+                    400
+                );
+            }
+
+            const correctOptions = options.filter((opt) => opt.is_correct);
+            if (correctOptions.length === 0) {
+                await transaction.rollback();
+                return ApiResponse.error(
+                    res,
+                    'At least one option must be marked as correct',
+                    400
+                );
+            }
         }
 
         // Create question
@@ -45,22 +58,24 @@ const createQuestion = async (req, res, next) => {
                 difficulty: difficulty || 'medium',
                 weightage: weightage || 1.0,
                 created_by: req.user.id,
-                question_type: req.body.question_type || 'mcq',
+                question_type,
                 reference_solution: req.body.reference_solution,
                 database_schema: req.body.database_schema,
             },
             { transaction }
         );
 
-        // Create MCQ options
-        const mcqOptions = options.map((opt, index) => ({
-            question_id: question.id,
-            option_text: opt.option_text,
-            is_correct: opt.is_correct,
-            display_order: opt.display_order || index + 1,
-        }));
+        // Create MCQ options if provided (for MCQ/Statement types)
+        if (options && Array.isArray(options) && options.length > 0) {
+            const mcqOptions = options.map((opt, index) => ({
+                question_id: question.id,
+                option_text: opt.option_text,
+                is_correct: opt.is_correct,
+                display_order: opt.display_order || index + 1,
+            }));
 
-        await MCQOption.bulkCreate(mcqOptions, { transaction });
+            await MCQOption.bulkCreate(mcqOptions, { transaction });
+        }
 
         await transaction.commit();
 
@@ -200,6 +215,7 @@ const updateQuestion = async (req, res, next) => {
         }
 
         const isAuthorized = req.user.role === 'admin' ||
+            req.user.role === 'invigilator' ||
             question.created_by === req.user.id ||
             (question.exams && question.exams.some(exam =>
                 exam.created_by === req.user.id ||
@@ -211,16 +227,20 @@ const updateQuestion = async (req, res, next) => {
             return ApiResponse.forbidden(res, 'You are not authorized to update this question');
         }
 
-        // Validate options if provided
-        if (options && options.length > 0) {
-            const correctOptions = options.filter((opt) => opt.is_correct);
-            if (correctOptions.length === 0) {
-                await transaction.rollback();
-                return ApiResponse.error(
-                    res,
-                    'At least one option must be marked as correct',
-                    400
-                );
+        const qt = req.body.question_type || question.question_type;
+
+        // Validate options if it's an MCQ or Statement type
+        if (qt === 'mcq' || qt === 'statement') {
+            if (options && options.length > 0) {
+                const correctOptions = options.filter((opt) => opt.is_correct);
+                if (correctOptions.length === 0) {
+                    await transaction.rollback();
+                    return ApiResponse.error(
+                        res,
+                        'At least one option must be marked as correct',
+                        400
+                    );
+                }
             }
         }
 
@@ -235,7 +255,7 @@ const updateQuestion = async (req, res, next) => {
             database_schema: req.body.database_schema,
         }, { transaction });
 
-        // Update options if provided
+        // Update options if provided OR if changing from MCQ/Statement to another type
         if (options && options.length > 0) {
             // Delete existing options
             await MCQOption.destroy({ where: { question_id: id }, transaction });
@@ -248,6 +268,9 @@ const updateQuestion = async (req, res, next) => {
                 display_order: opt.display_order || index + 1,
             }));
             await MCQOption.bulkCreate(mcqOptions, { transaction });
+        } else if (qt !== 'mcq' && qt !== 'statement') {
+            // If changing to a non-MCQ type, clear any existing options
+            await MCQOption.destroy({ where: { question_id: id }, transaction });
         }
 
         await transaction.commit();
@@ -264,7 +287,7 @@ const updateQuestion = async (req, res, next) => {
             'Question updated successfully'
         );
     } catch (error) {
-        await transaction.rollback();
+        if (transaction) await transaction.rollback();
         next(error);
     }
 };
@@ -291,6 +314,7 @@ const deleteQuestion = async (req, res, next) => {
         }
 
         const isAuthorized = req.user.role === 'admin' ||
+            req.user.role === 'invigilator' ||
             question.created_by === req.user.id ||
             (question.exams && question.exams.some(exam =>
                 exam.created_by === req.user.id ||

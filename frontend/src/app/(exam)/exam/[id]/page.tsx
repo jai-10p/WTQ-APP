@@ -17,6 +17,7 @@ export default function ExamPage() {
 
     const [currentQuestionIndex, setCurrentQuestionIndex] = useState(0);
     const [answers, setAnswers] = useState<Record<number, any>>({}); // exam_question_id -> selected_option_id OR sql_text
+    const [metadatas, setMetadatas] = useState<Record<number, any>>({}); // exam_question_id -> metadata (like selected language)
     const [questions, setQuestions] = useState<any[]>([]);
     const [examTitle, setExamTitle] = useState('');
     const [remainingTime, setRemainingTime] = useState(0);
@@ -41,12 +42,15 @@ export default function ExamPage() {
 
             // Map existing answers if any
             const existingAnswers: Record<number, any> = {};
+            const existingMetadatas: Record<number, any> = {};
             data.questions.forEach((q: any) => {
                 if (q.answer) {
                     existingAnswers[q.id] = q.answer.selected_option_id || q.answer.answer_text;
+                    existingMetadatas[q.id] = q.answer.metadata;
                 }
             });
             setAnswers(existingAnswers);
+            setMetadatas(existingMetadatas);
         } catch (error: any) {
             console.error('Failed to fetch exam questions:', error);
             showToast(error.response?.data?.message || 'Failed to load exam. Redirecting to dashboard.', 'error');
@@ -56,12 +60,13 @@ export default function ExamPage() {
         }
     };
 
-    const saveAnswer = async (examQuestionId: number, optionId?: number, sqlText?: string) => {
+    const saveAnswer = async (examQuestionId: number, optionId?: number, sqlText?: string, metadata?: any) => {
         try {
             await api.post(`/student/attempts/${attemptId}/answer`, {
                 exam_question_id: examQuestionId,
                 selected_option_id: optionId,
-                answer_text: sqlText
+                answer_text: sqlText,
+                metadata: metadata
             });
         } catch (error) {
             console.error('Failed to auto-save answer:', error);
@@ -87,7 +92,18 @@ export default function ExamPage() {
         }));
 
         // Auto-save SQL answer
-        saveAnswer(currentQuestion.id, undefined, sql);
+        saveAnswer(currentQuestion.id, undefined, sql, metadatas[currentQuestion.id]);
+    };
+
+    const handleMetadataChange = (metadata: any) => {
+        const currentQuestion = questions[currentQuestionIndex];
+        setMetadatas((prev) => ({
+            ...prev,
+            [currentQuestion.id]: metadata
+        }));
+
+        // Auto-save with metadata
+        saveAnswer(currentQuestion.id, undefined, answers[currentQuestion.id], metadata);
     };
 
     const handleNext = () => {
@@ -201,6 +217,8 @@ export default function ExamPage() {
                                 onOptionSelect={handleOptionSelect}
                                 sqlAnswer={typeof answers[currentQuestion.id] === 'string' ? answers[currentQuestion.id] : ''}
                                 onSqlChange={handleSqlChange}
+                                metadata={metadatas[currentQuestion.id]}
+                                onMetadataChange={handleMetadataChange}
                             />
                         </div>
 
