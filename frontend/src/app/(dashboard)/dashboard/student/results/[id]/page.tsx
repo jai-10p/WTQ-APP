@@ -10,7 +10,9 @@ import {
     Award,
     BarChart3,
     Target,
-    Loader2
+    Loader2,
+    Ban,
+    ShieldAlert
 } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/context/ToastContext';
@@ -72,22 +74,29 @@ export default function ResultDetailPage() {
             </div>
 
             {/* Score Overview Card */}
-            <div className={`rounded-2xl border p-8 shadow-sm overflow-hidden relative ${result.is_passed ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
+            <div className={`rounded-2xl border p-8 shadow-sm overflow-hidden relative ${result.status === 'disqualified' ? 'bg-zinc-50 border-zinc-200' :
+                result.is_passed ? 'bg-green-50 border-green-100' : 'bg-red-50 border-red-100'
                 }`}>
                 <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-8">
                     <div className="space-y-4">
-                        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider ${result.is_passed ? 'bg-green-600 text-white' : 'bg-red-600 text-white'
-                            }`}>
-                            {result.is_passed ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
-                            {result.is_passed ? 'Passed' : 'Failed'}
+                        <div className={`inline-flex items-center gap-2 px-4 py-1.5 rounded-full text-sm font-bold uppercase tracking-wider 
+                            ${result.status === 'disqualified' ? 'bg-zinc-900 text-white border border-zinc-800' :
+                                result.is_passed ? 'bg-green-600 text-white' : 'bg-red-600 text-white'}`}>
+                            {result.status === 'disqualified' ? <Ban className="w-4 h-4" /> :
+                                result.is_passed ? <CheckCircle2 className="w-4 h-4" /> : <XCircle className="w-4 h-4" />}
+                            {result.status === 'disqualified' ? 'Disqualified' :
+                                result.is_passed ? 'Passed' : 'Failed'}
                         </div>
-                        <h2 className="text-4xl font-black text-gray-900 leading-tight">
-                            Your Score: {Math.round(result.percentage)}%
+                        <h2 className="text-4xl font-black text-gray-900 leading-tight tracking-tight">
+                            {result.status === 'disqualified' ? 'Attempt Invalid' : `Your Score: ${Math.round(result.percentage)}%`}
                         </h2>
-                        <p className={`text-lg font-medium ${result.is_passed ? 'text-green-800' : 'text-red-800'}`}>
-                            {result.is_passed
-                                ? "Excellent work! You've successfully cleared this assessment."
-                                : "You didn't meet the passing criteria this time. Keep practicing!"
+                        <p className={`text-lg font-medium leading-relaxed ${result.status === 'disqualified' ? 'text-zinc-700' :
+                            result.is_passed ? 'text-green-800' : 'text-red-800'}`}>
+                            {result.status === 'disqualified'
+                                ? "This attempt was invalidated due to multiple cheating violations (tab switching/minimizing)."
+                                : result.is_passed
+                                    ? "Excellent work! You've successfully cleared this assessment."
+                                    : "You didn't meet the passing criteria this time. Keep practicing!"
                             }
                         </p>
                     </div>

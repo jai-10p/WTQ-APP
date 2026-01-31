@@ -50,13 +50,22 @@ const getAvailableExams = async (req, res, next) => {
 
         const { count, rows: rawExams } = await Exam.findAndCountAll({
             where: whereClause,
-            include: [{
-                model: ExamAttempt,
-                as: 'attempts',
-                where: { student_id: req.user.id },
-                required: false,
-                attributes: ['id', 'status'],
-            }],
+            include: [
+                {
+                    model: ExamAttempt,
+                    as: 'attempts',
+                    where: { student_id: req.user.id },
+                    required: false,
+                    attributes: ['id', 'status'],
+                },
+                {
+                    model: ExamQuestion,
+                    as: 'exam_question_links',
+                    attributes: [],
+                    required: true // Only show exams that have questions
+                }
+            ],
+            distinct: true,
             limit: parseInt(limit),
             offset: parseInt(offset),
             order: [
@@ -103,6 +112,12 @@ const startExam = async (req, res, next) => {
         const exam = await Exam.findByPk(id);
         if (!exam || !exam.is_active) {
             return ApiResponse.notFound(res, 'Exam not found or inactive');
+        }
+
+        // 1b. Check if exam has questions
+        const questionCount = await ExamQuestion.count({ where: { exam_id: id } });
+        if (questionCount === 0) {
+            return ApiResponse.error(res, 'This exam is not ready yet (no questions assigned)', 400);
         }
 
         // 2. Check schedule
@@ -190,7 +205,7 @@ const getAttemptQuestions = async (req, res, next) => {
                         as: 'options',
                         attributes: ['id', 'option_text', 'display_order']
                     }],
-                    attributes: ['id', 'question_text', 'image_url', 'question_type', 'database_schema']
+                    attributes: ['id', 'question_text', 'image_url', 'question_type', 'database_schema', 'reference_solution']
                 }]
             }],
         });
@@ -227,7 +242,8 @@ const getAttemptQuestions = async (req, res, next) => {
                     image_url: q.image_url,
                     question_type: q.question_type,
                     database_schema: q.database_schema,
-                    options: q.options
+                    options: q.options,
+                    example_test_case: q.question_type === 'coding' ? getExampleTestCase(q.reference_solution) : null
                 }
             };
         });
@@ -304,31 +320,44 @@ const submitAnswer = async (req, res, next) => {
         }
 
         // 4. Save/Update answer
-        // We use upsert-like logic: find existing answer for this question and update, or create new.
+        try {
+            const [answer, created] = await StudentAnswer.findOrCreate({
+                where: {
+                    attempt_id: attempt.id,
+                    exam_question_id: exam_question_id
+                },
+                defaults: {
+                    selected_option_id: selected_option_id || null,
+                    answer_text: req.body.answer_text || null,
+                    metadata: req.body.metadata || null
+                }
+            });
 
-        // Actually Sequelize upsert or findOne then update
-        const existingAnswer = await StudentAnswer.findOne({
-            where: {
-                attempt_id: attempt.id,
-                exam_question_id: exam_question_id
+            if (!created) {
+                await answer.update({
+                    selected_option_id: selected_option_id || null,
+                    answer_text: req.body.answer_text || null,
+                    metadata: req.body.metadata || null,
+                    answered_at: new Date()
+                });
             }
-        });
-
-        if (existingAnswer) {
-            await existingAnswer.update({
-                selected_option_id: selected_option_id || null,
-                answer_text: req.body.answer_text || null,
-                metadata: req.body.metadata || null,
-                answered_at: new Date()
-            });
-        } else {
-            await StudentAnswer.create({
-                attempt_id: attempt.id,
-                exam_question_id: exam_question_id,
-                selected_option_id: selected_option_id || null,
-                answer_text: req.body.answer_text || null,
-                metadata: req.body.metadata || null
-            });
+        } catch (error) {
+            // Handle race conditions where another request created it between findOne and create
+            if (error.name === 'SequelizeUniqueConstraintError') {
+                await StudentAnswer.update({
+                    selected_option_id: selected_option_id || null,
+                    answer_text: req.body.answer_text || null,
+                    metadata: req.body.metadata || null,
+                    answered_at: new Date()
+                }, {
+                    where: {
+                        attempt_id: attempt.id,
+                        exam_question_id: exam_question_id
+                    }
+                });
+            } else {
+                throw error;
+            }
         }
 
         return ApiResponse.success(res, null, 'Answer saved');
@@ -350,7 +379,9 @@ const submitExam = async (req, res, next) => {
 
         const attempt = await ExamAttempt.findOne({
             where: { id: attemptId, student_id: studentId },
-            include: [{ model: Exam, as: 'exam' }]
+            include: [{ model: Exam, as: 'exam' }],
+            transaction,
+            lock: transaction.LOCK.UPDATE
         });
 
         if (!attempt) {
@@ -366,7 +397,11 @@ const submitExam = async (req, res, next) => {
         }
 
         // 1. Mark as submitted
-        const status = isTimeExpired(attempt.started_at, attempt.exam.duration_minutes) ? 'timeout' : 'submitted';
+        let status = req.body.status === 'disqualified' ? 'disqualified' : null;
+        if (!status) {
+            status = isTimeExpired(attempt.started_at, attempt.exam.duration_minutes) ? 'timeout' : 'submitted';
+        }
+
         await attempt.update({
             status: status,
             submitted_at: new Date()
@@ -467,7 +502,12 @@ const submitExam = async (req, res, next) => {
         }
 
         const percentage = maxScore > 0 ? (totalScore / maxScore) * 100 : 0;
-        const isPassed = percentage >= attempt.exam.passing_score;
+        let isPassed = percentage >= attempt.exam.passing_score;
+
+        // Force fail if disqualified
+        if (status === 'disqualified') {
+            isPassed = false;
+        }
 
         // 3. Create Result
         const result = await ExamResult.create({
@@ -525,6 +565,7 @@ const getExamResult = async (req, res, next) => {
 
         return ApiResponse.success(res, {
             ...attempt.result.toJSON(),
+            status: attempt.status,
             breakdown
         });
     } catch (error) {
@@ -723,8 +764,36 @@ const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
 
             await transaction.rollback();
 
-            // Compare results (JSON stringify is a simple way to compare row sets)
-            return JSON.stringify(studentResults) === JSON.stringify(referenceResults);
+            // Canonicalize results for fair comparison
+            const canonicalize = (results) => {
+                if (!Array.isArray(results)) return results;
+                if (results.length === 0) return [];
+
+                // 1. Normalize all rows: lowercase keys and sort columns by key name
+                const normalized = results.map(row => {
+                    const sortedRow = {};
+                    Object.keys(row).sort().forEach(key => {
+                        // Store value as string for consistent comparison (handles decimals/floats)
+                        let val = row[key];
+                        if (typeof val === 'number') val = val.toString();
+                        sortedRow[key.toLowerCase()] = val;
+                    });
+                    return sortedRow;
+                });
+
+                // 2. Sort the rows themselves to ignore row order (unless specified)
+                // We stringify for comparison sorting
+                return normalized.sort((a, b) => {
+                    const strA = JSON.stringify(a);
+                    const strB = JSON.stringify(b);
+                    return strA.localeCompare(strB);
+                });
+            };
+
+            const studentCanonical = canonicalize(studentResults);
+            const referenceCanonical = canonicalize(referenceResults);
+
+            return JSON.stringify(studentCanonical) === JSON.stringify(referenceCanonical);
         } catch (e) {
             console.error('SQL Grading Error:', e);
             if (transaction) await transaction.rollback();
@@ -733,6 +802,20 @@ const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
     } catch (e) {
         return false;
     }
+};
+
+
+const getExampleTestCase = (solution) => {
+    try {
+        if (!solution) return null;
+        const parsed = JSON.parse(solution);
+        if (parsed.test_cases && parsed.test_cases.length > 0) {
+            return parsed.test_cases[0];
+        }
+    } catch (e) {
+        // console.error('Error parsing solution for example test case:', e);
+    }
+    return null;
 };
 
 module.exports = {

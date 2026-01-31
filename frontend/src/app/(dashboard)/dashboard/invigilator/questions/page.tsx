@@ -12,7 +12,8 @@ import {
     Edit,
     Trash2,
     X,
-    Code
+    Code,
+    AlertTriangle
 } from 'lucide-react';
 import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
@@ -29,11 +30,14 @@ export default function QuestionsPage() {
     const [typeFilter, setTypeFilter] = useState('all');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingQuestion, setEditingQuestion] = useState<any>(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
 
     const [formData, setFormData] = useState({
         question_text: '',
         difficulty: 'medium',
-        weightage: 1,
         question_type: 'mcq',
         category: 'QA',
         reference_solution: '',
@@ -44,12 +48,80 @@ export default function QuestionsPage() {
             { option_text: '', is_correct: false, display_order: 3 },
             { option_text: '', is_correct: false, display_order: 4 },
         ],
-        test_cases: [{ input: '', expected_output: '' }]
+        test_cases: [{ input: '', expected_output: '' }],
+        image_url: ''
     });
 
     useEffect(() => {
         fetchInitialData();
     }, []);
+
+    const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = e.target.files;
+        if (!files || files.length === 0) return;
+
+        console.log('🖼️ Upload started:', files.length, 'file(s)');
+        const uploadFormData = new FormData();
+
+        try {
+            // For SQL questions, always use the multiple upload endpoint
+            if (formData.question_type === 'sql') {
+                // Get existing images
+                let existingImages: string[] = [];
+                if (formData.image_url) {
+                    try {
+                        if (formData.image_url.startsWith('[')) {
+                            existingImages = JSON.parse(formData.image_url);
+                        } else {
+                            existingImages = [formData.image_url];
+                        }
+                    } catch (e) {
+                        console.warn('Failed to parse existing images:', e);
+                    }
+                }
+
+                // Calculate how many more images we can add (max 3 total)
+                const remainingSlots = 3 - existingImages.length;
+                if (remainingSlots <= 0) {
+                    showToast('Maximum 3 images allowed. Please clear existing images first.', 'warning');
+                    e.target.value = '';
+                    return;
+                }
+
+                Array.from(files).slice(0, remainingSlots).forEach(file => {
+                    console.log('📎 Adding file:', file.name, file.size, 'bytes');
+                    uploadFormData.append('images', file);
+                });
+
+                console.log('📡 Posting to /questions/upload-images...');
+                const response: any = await api.post('/questions/upload-images', uploadFormData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                console.log('✅ Upload response:', response.data);
+
+                const newImageUrls = response.data.data.image_urls;
+                const allImages = [...existingImages, ...newImageUrls];
+
+                setFormData(prev => ({ ...prev, image_url: JSON.stringify(allImages) }));
+                showToast(`${newImageUrls.length} image(s) added (${allImages.length} total)`, 'success');
+            } else {
+                // For other question types (if ever needed), use single upload
+                uploadFormData.append('image', files[0]);
+                const response: any = await api.post('/questions/upload-image', uploadFormData, {
+                    headers: { 'Content-Type': 'multipart/form-data' }
+                });
+                setFormData(prev => ({ ...prev, image_url: response.data.data.image_url }));
+                showToast('Image uploaded', 'success');
+            }
+        } catch (error: any) {
+            console.error('❌ Upload error:', error);
+            console.error('Error response:', error.response?.data);
+            showToast(error.response?.data?.message || 'Upload failed', 'error');
+        } finally {
+            // Reset input to allow re-uploading the same file
+            e.target.value = '';
+        }
+    };
 
     const fetchInitialData = async () => {
         try {
@@ -101,14 +173,36 @@ export default function QuestionsPage() {
             return;
         }
 
-        const dataToSave = { ...formData };
+        const dataToSave: any = { ...formData };
 
         // Prepare data based on type
         if (formData.question_type === 'coding') {
             dataToSave.reference_solution = JSON.stringify({ test_cases: formData.test_cases });
+            // Remove options for coding questions
+            delete dataToSave.options;
+            delete dataToSave.test_cases;
+        } else if (formData.question_type === 'sql' || formData.question_type === 'output') {
+            // SQL and output questions don't have options or test_cases
+            delete dataToSave.options;
+            delete dataToSave.test_cases;
+        } else {
+            // MCQ and statement questions don't have test_cases
+            delete dataToSave.test_cases;
         }
 
+        // Remove image_url for non-SQL questions or if empty
+        if (formData.question_type !== 'sql' || !dataToSave.image_url || dataToSave.image_url === '') {
+            delete dataToSave.image_url;
+        }
+
+        console.log('💾 Saving question:', dataToSave);
+        console.log('💾 Question type:', dataToSave.question_type);
+        console.log('💾 Has options?', 'options' in dataToSave);
+        console.log('💾 Has test_cases?', 'test_cases' in dataToSave);
+        console.log('💾 Has image_url?', 'image_url' in dataToSave, dataToSave.image_url);
+
         try {
+            setIsSaving(true);
             if (editingQuestion) {
                 await api.put(`/questions/${editingQuestion.id}`, dataToSave);
                 showToast('Question updated successfully!', 'success');
@@ -121,15 +215,23 @@ export default function QuestionsPage() {
             resetForm();
             fetchInitialData();
         } catch (error: any) {
-            showToast(error.response?.data?.message || 'Failed to save question', 'error');
+            console.error('❌ Save error:', error);
+            console.error('Error response:', error.response?.data);
+            if (error.response?.data?.errors) {
+                console.error('Validation errors:', error.response.data.errors);
+            }
+            const errorMsg = error.response?.data?.errors?.[0]?.message || error.response?.data?.message || 'Failed to save question';
+            showToast(errorMsg, 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
+
 
     const resetForm = () => {
         setFormData({
             question_text: '',
             difficulty: 'medium',
-            weightage: 1,
             question_type: 'mcq',
             category: 'QA',
             reference_solution: '',
@@ -140,7 +242,8 @@ export default function QuestionsPage() {
                 { option_text: '', is_correct: false, display_order: 3 },
                 { option_text: '', is_correct: false, display_order: 4 },
             ],
-            test_cases: [{ input: '', expected_output: '' }]
+            test_cases: [{ input: '', expected_output: '' }],
+            image_url: ''
         });
     };
 
@@ -154,7 +257,7 @@ export default function QuestionsPage() {
         } else if (type === 'coding') {
             newData.options = [];
             newData.test_cases = [{ input: '', expected_output: '' }];
-        } else if (type === 'mcq' && formData.options.length < 2) {
+        } else if (type === 'mcq' && newData.options.length < 4) {
             newData.options = [
                 { option_text: '', is_correct: true, display_order: 1 },
                 { option_text: '', is_correct: false, display_order: 2 },
@@ -162,6 +265,7 @@ export default function QuestionsPage() {
                 { option_text: '', is_correct: false, display_order: 4 },
             ];
         }
+
         setFormData(newData);
     };
 
@@ -181,7 +285,6 @@ export default function QuestionsPage() {
         setFormData({
             question_text: q.question_text,
             difficulty: q.difficulty,
-            weightage: q.weightage,
             question_type: q.question_type || 'mcq',
             category: q.category || 'QA',
             reference_solution: q.reference_solution || '',
@@ -191,21 +294,33 @@ export default function QuestionsPage() {
                 is_correct: opt.is_correct,
                 display_order: opt.display_order
             })) || [],
-            test_cases: testCases
+            test_cases: testCases,
+            image_url: q.image_url || ''
         });
         setIsModalOpen(true);
     };
 
-    const handleDeleteQuestion = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this question?')) return;
+    const handleDeleteQuestion = (id: number) => {
+        setDeletingId(id);
+        setShowDeleteModal(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!deletingId || isSaving) return;
         try {
-            await api.delete(`/questions/${id}`);
+            setIsSaving(true);
+            await api.delete(`/questions/${deletingId}`);
             showToast('Question deleted successfully!', 'success');
+            setShowDeleteModal(false);
+            setDeletingId(null);
             fetchInitialData();
         } catch (error: any) {
             showToast(error.response?.data?.message || 'Failed to delete question', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
+
 
     const filteredQuestions = questions.filter(q => {
         const matchesSearch = q.question_text?.toLowerCase().includes(searchTerm.toLowerCase());
@@ -247,7 +362,7 @@ export default function QuestionsPage() {
                     </div>
                     <div className="flex flex-wrap items-center gap-4">
                         <div className="flex items-center gap-2">
-                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Category:</span>
+                            <span className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">FOR:</span>
                             <select
                                 className="border border-gray-200 rounded-lg px-3 py-1.5 text-xs outline-none focus:ring-2 focus:ring-blue-500 font-bold bg-white"
                                 value={categoryFilter}
@@ -328,7 +443,6 @@ export default function QuestionsPage() {
                                                 </div>
                                                 <div>
                                                     <p className="text-sm font-bold text-gray-900 line-clamp-2">{q.question_text}</p>
-                                                    <p className="text-[10px] text-gray-400 mt-1 font-bold uppercase tracking-widest">Points • {q.weightage}</p>
                                                 </div>
                                             </div>
                                         </td>
@@ -376,8 +490,9 @@ export default function QuestionsPage() {
                             </button>
                         </div>
 
-                        <form onSubmit={handleSaveQuestion} className="flex-1 overflow-y-auto p-8 space-y-8 scrollbar-hide">
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <form onSubmit={handleSaveQuestion} className="flex-1 overflow-y-auto p-8 space-y-8">
+
+                            <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                                 <div>
                                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Category</label>
                                     <select
@@ -404,16 +519,6 @@ export default function QuestionsPage() {
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Weightage</label>
-                                    <input
-                                        type="number"
-                                        min="1"
-                                        className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700"
-                                        value={formData.weightage}
-                                        onChange={(e) => setFormData({ ...formData, weightage: parseInt(e.target.value) || 1 })}
-                                    />
-                                </div>
-                                <div>
                                     <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Type</label>
                                     <select
                                         className="w-full border border-gray-200 rounded-xl px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-blue-500 font-bold text-gray-700 bg-white"
@@ -428,6 +533,57 @@ export default function QuestionsPage() {
                                     </select>
                                 </div>
                             </div>
+
+                            {/* Image Upload Section - Only for SQL Questions */}
+                            {formData.question_type === 'sql' && (
+                                <div className="space-y-3">
+                                    <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest">
+                                        Question Images (Optional - Up to 3 images supported)
+                                    </label>
+                                    <div className="flex items-center gap-4">
+                                        <label className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 rounded-xl cursor-pointer hover:bg-gray-50 transition-all text-sm font-medium text-gray-600 shadow-sm">
+                                            <div className="p-1.5 bg-blue-50 rounded-lg">
+                                                <svg className="w-4 h-4 text-blue-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 16v1a2 2 0 002 2h12a2 2 0 002-2v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+                                                </svg>
+                                            </div>
+                                            <span>Upload Images</span>
+                                            <input
+                                                type="file"
+                                                className="hidden"
+                                                accept="image/*"
+                                                multiple
+                                                onChange={handleImageUpload}
+                                            />
+                                        </label>
+                                        {formData.image_url && (
+                                            <button
+                                                type="button"
+                                                onClick={() => setFormData({ ...formData, image_url: '' })}
+                                                className="text-xs text-red-500 font-bold hover:underline"
+                                            >
+                                                Clear All
+                                            </button>
+                                        )}
+                                    </div>
+                                    {formData.image_url && (
+                                        <div className="flex flex-wrap gap-3 p-4 bg-gray-50 rounded-xl border border-dashed border-gray-200">
+                                            {(() => {
+                                                try {
+                                                    if (formData.image_url.startsWith('[')) {
+                                                        return JSON.parse(formData.image_url).map((url: string, idx: number) => (
+                                                            <div key={idx} className="relative group">
+                                                                <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                                                            </div>
+                                                        ));
+                                                    }
+                                                } catch (e) { }
+                                                return <img src={formData.image_url} alt="" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />;
+                                            })()}
+                                        </div>
+                                    )}
+                                </div>
+                            )}
 
                             <div>
                                 <label className="block text-[10px] font-bold text-gray-400 uppercase tracking-widest mb-2">Question Text</label>
@@ -581,16 +737,74 @@ export default function QuestionsPage() {
                                 </div>
                             )}
 
-                            <div className="flex justify-end gap-3 pt-8 border-t sticky bottom-0 bg-white pb-2">
-                                <button type="button" onClick={() => { setIsModalOpen(false); setEditingQuestion(null); }} className="px-6 py-2.5 text-sm font-bold text-gray-500 hover:text-gray-700 transition-colors">Cancel</button>
-                                <button type="submit" className="px-10 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all font-bold">
-                                    {editingQuestion ? 'Update' : 'Create'} Question
+                            <div className="flex justify-end">
+
+                                <button
+                                    type="button"
+                                    disabled={isSaving}
+                                    onClick={() => { setIsModalOpen(false); setEditingQuestion(null); }}
+                                    className="px-6 py-2.5 text-sm font-bold text-gray-400 hover:text-gray-600 transition-colors disabled:opacity-50"
+                                >
+                                    Cancel
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={isSaving}
+                                    className="px-10 py-2.5 bg-blue-600 text-white rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-200 transition-all font-bold disabled:bg-blue-400 disabled:shadow-none flex items-center gap-2"
+                                >
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>{editingQuestion ? 'Updating...' : 'Creating...'}</span>
+                                        </>
+                                    ) : (
+                                        <>{editingQuestion ? 'Update' : 'Create'} Question</>
+                                    )}
                                 </button>
                             </div>
+
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Custom Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}></div>
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full relative z-10 text-center shadow-2xl animate-in fade-in zoom-in duration-300">
+                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Trash2 className="w-10 h-10 text-red-600" />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">DELETE QUESTION?</h2>
+                        <p className="text-sm text-gray-500 mb-8 font-medium">
+                            This will permanently delete the question from the question bank and all associated exams.
+                        </p>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                disabled={isSaving}
+                                className="flex-1 px-4 py-3 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 transition-colors font-bold text-sm disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={isSaving}
+                                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-bold text-sm flex items-center justify-center gap-2 disabled:bg-red-400"
+                            >
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <span>Deleting...</span>
+                                    </>
+                                ) : 'Delete'}
+                            </button>
+                        </div>
                     </div>
                 </div>
             )}
         </div>
     );
 }
+

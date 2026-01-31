@@ -8,7 +8,7 @@ const router = express.Router();
 const questionController = require('../controllers/question.controller');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
 const validate = require('../middlewares/validate.middleware');
-const { uploadImage, uploadCSV } = require('../middlewares/upload.middleware');
+const { uploadImage, uploadImages, uploadCSV } = require('../middlewares/upload.middleware');
 const {
     createQuestionValidator,
     updateQuestionValidator,
@@ -28,6 +28,14 @@ router.post(
     authorize('invigilator'),
     uploadImage,
     questionController.uploadQuestionImage
+);
+
+router.post(
+    '/upload-images',
+    authenticate,
+    authorize('invigilator'),
+    uploadImages,
+    questionController.uploadQuestionImages
 );
 
 /**

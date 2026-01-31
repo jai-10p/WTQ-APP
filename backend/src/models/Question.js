@@ -20,9 +20,9 @@ const Question = sequelize.define('questions', {
         },
     },
     image_url: {
-        type: DataTypes.STRING(500),
+        type: DataTypes.TEXT,
         allowNull: true,
-        comment: 'Optional image path or URL',
+        comment: 'Optional image path or JSON array of paths',
     },
     difficulty: {
         type: DataTypes.ENUM('easy', 'medium', 'hard'),

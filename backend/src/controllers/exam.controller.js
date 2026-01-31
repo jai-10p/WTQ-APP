@@ -307,18 +307,35 @@ const removeQuestion = async (req, res, next) => {
             return ApiResponse.forbidden(res, 'You are not authorized to remove questions from this exam');
         }
 
-        const deleted = await ExamQuestion.destroy({
+        const examQuestionToRemove = await ExamQuestion.findOne({
             where: {
                 exam_id: id,
                 question_id: questionId,
             },
         });
 
-        if (!deleted) {
+        if (!examQuestionToRemove) {
             return ApiResponse.notFound(res, 'Question not found in this exam');
         }
 
-        return ApiResponse.success(res, null, 'Question removed from exam');
+        const removedOrder = examQuestionToRemove.question_order;
+        await examQuestionToRemove.destroy();
+
+        // Reorder remaining questions
+        const remainingQuestions = await ExamQuestion.findAll({
+            where: { exam_id: id },
+            order: [['question_order', 'ASC']],
+        });
+
+        for (let i = 0; i < remainingQuestions.length; i++) {
+            if (remainingQuestions[i].question_order > removedOrder) {
+                await remainingQuestions[i].update({
+                    question_order: i + 1
+                });
+            }
+        }
+
+        return ApiResponse.success(res, null, 'Question removed and exam reordered');
     } catch (error) {
         next(error);
     }
@@ -395,7 +412,9 @@ const getExamAttempts = async (req, res, next) => {
         const attempts = await ExamAttempt.findAll({
             where: {
                 exam_id: id,
-                status: 'submitted'
+                status: {
+                    [Op.in]: ['submitted', 'disqualified', 'timeout']
+                }
             },
             include: [
                 {

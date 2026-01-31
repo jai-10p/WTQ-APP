@@ -46,6 +46,12 @@ if (config.env === 'development') {
 }
 
 // ============================================================
+// STATIC FILE SERVING
+// ============================================================
+const path = require('path');
+app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
+
+// ============================================================
 // API ROUTES
 // ============================================================
 app.use(`/api/${config.apiVersion}`, routes);

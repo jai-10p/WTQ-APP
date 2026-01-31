@@ -40,7 +40,7 @@ const ExamAttempt = sequelize.define('exam_attempts', {
         allowNull: true,
     },
     status: {
-        type: DataTypes.ENUM('in_progress', 'submitted', 'abandoned', 'timeout'),
+        type: DataTypes.ENUM('in_progress', 'submitted', 'abandoned', 'timeout', 'disqualified'),
         allowNull: false,
         defaultValue: 'in_progress',
     },

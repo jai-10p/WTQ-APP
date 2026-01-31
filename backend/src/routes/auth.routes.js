@@ -9,6 +9,8 @@ const authController = require('../controllers/auth.controller');
 const validate = require('../middlewares/validate.middleware');
 const { body } = require('express-validator');
 const { authenticate, authorize } = require('../middlewares/auth.middleware');
+const { uploadCSV } = require('../middlewares/upload.middleware');
+
 
 const loginValidator = [
     body('email').notEmpty().withMessage('Username or Email is required'),
@@ -41,4 +43,17 @@ router.post(
     authController.register
 );
 
+/**
+ * @route   POST /api/v1/auth/bulk-register
+ * @desc    Bulk register users from CSV/Excel (Admin only)
+ */
+router.post(
+    '/bulk-register',
+    authenticate,
+    authorize('admin'),
+    uploadCSV,
+    authController.bulkRegister
+);
+
 module.exports = router;
+

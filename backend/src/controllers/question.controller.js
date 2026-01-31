@@ -444,9 +444,38 @@ const deleteOption = async (req, res, next) => {
  * @route POST /api/v1/questions/upload-image
  * @access Admin, Super User
  */
+const uploadQuestionImages = async (req, res, next) => {
+    try {
+        console.log('📥 Upload images request received');
+        console.log('Files:', req.files ? req.files.length : 0);
+
+        if (!req.files || req.files.length === 0) {
+            console.log('❌ No files in request');
+            return ApiResponse.error(res, 'No images provided', 400);
+        }
+
+        const imagePaths = req.files.map(file => {
+            const path = `/uploads/questions/${file.filename}`;
+            console.log('✅ File uploaded:', file.filename, '→', path);
+            return path;
+        });
+
+        console.log('📤 Returning', imagePaths.length, 'image URLs');
+        return ApiResponse.success(res, { image_urls: imagePaths }, 'Images uploaded successfully');
+    } catch (error) {
+        console.error('❌ Upload error:', error);
+        next(error);
+    }
+};
+
 const uploadQuestionImage = async (req, res, next) => {
     try {
         if (!req.file) {
+            // Check if multiple were sent instead
+            if (req.files && req.files.length > 0) {
+                const imagePath = `/uploads/questions/${req.files[0].filename}`;
+                return ApiResponse.success(res, { image_url: imagePath }, 'Image uploaded successfully');
+            }
             return ApiResponse.error(res, 'No image file provided', 400);
         }
 
@@ -624,6 +653,7 @@ module.exports = {
     updateOption,
     deleteOption,
     uploadQuestionImage,
+    uploadQuestionImages,
     bulkUploadQuestions,
     downloadCSVTemplate,
     runSQL,

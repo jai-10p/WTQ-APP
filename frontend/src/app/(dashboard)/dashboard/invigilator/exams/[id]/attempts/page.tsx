@@ -12,7 +12,9 @@ import {
     CheckCircle2,
     XCircle,
     UserCheck,
-    Clock
+    Clock,
+    AlertTriangle,
+    Ban
 } from 'lucide-react';
 import api from '@/services/api';
 import { useToast } from '@/context/ToastContext';
@@ -61,7 +63,9 @@ export default function ExamAttemptsPage() {
             attempt.student?.email.toLowerCase().includes(searchTerm.toLowerCase());
 
         const matchesStatus = statusFilter === 'all' ||
-            (statusFilter === 'passed' ? attempt.result?.is_passed : !attempt.result?.is_passed);
+            (statusFilter === 'passed' ? (attempt.result?.is_passed && attempt.status !== 'disqualified') :
+                statusFilter === 'disqualified' ? attempt.status === 'disqualified' :
+                    (!attempt.result?.is_passed && attempt.status !== 'disqualified'));
 
         const matchesDesignation = designationFilter === 'all' ||
             attempt.student?.designation === designationFilter;
@@ -78,7 +82,7 @@ export default function ExamAttemptsPage() {
             attempt.student?.designation || 'N/A',
             attempt.result?.percentage,
             `${attempt.result?.total_score}/${attempt.result?.max_score}`,
-            attempt.result?.is_passed ? 'Passed' : 'Failed',
+            attempt.status === 'disqualified' ? 'Disqualified' : (attempt.result?.is_passed ? 'Passed' : 'Failed'),
             new Date(attempt.submitted_at).toLocaleDateString()
         ]);
 
@@ -160,6 +164,7 @@ export default function ExamAttemptsPage() {
                             <option value="all">All Status</option>
                             <option value="passed">Passed</option>
                             <option value="failed">Failed</option>
+                            <option value="disqualified">Disqualified</option>
                         </select>
                         <select
                             className="border border-gray-200 rounded-lg px-3 py-2 text-sm outline-none focus:ring-2 focus:ring-green-500 font-bold text-gray-600"
@@ -231,9 +236,10 @@ export default function ExamAttemptsPage() {
                                             <div className="inline-flex flex-col items-center">
                                                 <span className={clsx(
                                                     "text-sm font-bold",
-                                                    attempt.result?.is_passed ? "text-green-600" : "text-red-600"
+                                                    attempt.status === 'disqualified' ? "text-gray-400 line-through" :
+                                                        attempt.result?.is_passed ? "text-green-600" : "text-red-600"
                                                 )}>
-                                                    {attempt.result?.percentage}%
+                                                    {attempt.status === 'disqualified' ? "0.00%" : `${attempt.result?.percentage}%`}
                                                 </span>
                                                 <span className="text-[10px] text-gray-400 font-bold">
                                                     {attempt.result?.total_score} / {attempt.result?.max_score} Pts
@@ -241,12 +247,19 @@ export default function ExamAttemptsPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-center">
-                                            <span className={clsx(
-                                                "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
-                                                attempt.result?.is_passed ? "bg-green-50 text-green-700 border border-green-100" : "bg-red-50 text-red-700 border border-red-100"
-                                            )}>
-                                                {attempt.result?.is_passed ? "Pass" : "Fail"}
-                                            </span>
+                                            {attempt.status === 'disqualified' ? (
+                                                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest bg-zinc-900 text-white border border-zinc-800 shadow-sm animate-pulse">
+                                                    <Ban className="w-3 h-3" />
+                                                    Disqualified
+                                                </span>
+                                            ) : (
+                                                <span className={clsx(
+                                                    "inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[10px] font-bold uppercase tracking-widest",
+                                                    attempt.result?.is_passed ? "bg-green-50 text-green-700 border border-green-100" : "bg-red-50 text-red-700 border border-red-100"
+                                                )}>
+                                                    {attempt.result?.is_passed ? "Pass" : "Fail"}
+                                                </span>
+                                            )}
                                         </td>
                                         <td className="px-6 py-4 text-right">
                                             <div className="flex flex-col items-end">

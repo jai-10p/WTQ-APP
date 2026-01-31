@@ -33,130 +33,119 @@ export default function LoginPage() {
     };
 
     return (
-        <div className="flex flex-col lg:flex-row min-h-screen">
-            {/* Left Panel - Banner */}
-            <div className="hidden lg:flex lg:w-[60%] relative bg-[#1B4D6B] flex-col items-center justify-center p-12 overflow-hidden">
-                <div className="relative z-10 w-full h-full flex items-center justify-center">
-                    <Image
-                        src="/wtq_banner.png"
-                        alt="Women Tech Quest 2026"
-                        fill
-                        className="object-cover opacity-90"
-                        priority
-                    />
-                    <div className="absolute inset-0 bg-gradient-to-r from-[#1B4D6B]/50 to-transparent"></div>
-
-                    {/* Floating Branding / Text Overlay if needed */}
-                    <div className="absolute bottom-12 left-12 z-20">
-                        <div className="text-white">
-                            <h2 className="text-2xl font-bold">Welcome to</h2>
-                            <h3 className="text-4xl font-black text-yellow-400 drop-shadow-lg">
-                                WomenTechQuest Exam Portal
-                            </h3>
-                        </div>
-                    </div>
+        <div className="flex flex-col lg:flex-row min-h-screen bg-slate-50">
+            {/* Left Panel - Banner Experience */}
+            <div className="hidden lg:flex lg:w-[60%] relative bg-[#0a192f] flex-col items-center justify-center overflow-hidden">
+                {/* Techy Glow Elements in Background */}
+                <div className="absolute inset-0 z-0">
+                    <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-full h-full bg-[radial-gradient(circle_at_center,_#112240_0%,_#0a192f_70%)]"></div>
+                    <div className="absolute top-[10%] left-[10%] w-[50%] h-[50%] bg-blue-500/10 rounded-full blur-[120px] animate-pulse"></div>
+                    <div className="absolute bottom-[10%] right-[10%] w-[50%] h-[50%] bg-purple-500/10 rounded-full blur-[120px] animate-pulse delay-1000"></div>
                 </div>
 
-                {/* Decorative Elements */}
-                <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-400/10 rounded-full -translate-y-1/2 translate-x-1/2 blur-3xl"></div>
-                <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-400/10 rounded-full translate-y-1/2 -translate-x-1/2 blur-3xl"></div>
+                {/* Seamless Foreground Image */}
+                <div className="relative z-10 w-full h-full flex items-center justify-center p-4">
+                    <div className="relative w-full h-full max-w-[90%] max-h-[90%] transition-all duration-1000 hover:scale-[1.02]">
+                        <Image
+                            src="/wtq_banner.png"
+                            alt="Women Tech Quest 2026"
+                            fill
+                            className="object-contain drop-shadow-[0_0_50px_rgba(59,130,246,0.15)]"
+                            priority
+                        />
+                    </div>
+                </div>
             </div>
 
             {/* Right Panel - Login Form */}
-            <div className="flex-1 flex flex-col items-center justify-center p-8 lg:p-16 bg-white">
-                <div className="w-full max-w-[440px] space-y-10">
-                    <div className="space-y-2">
-                        <h1 className="text-4xl font-bold text-gray-900 tracking-tight">
-                            Welcome!
-                        </h1>
-                        <h2 className="text-2xl font-semibold text-gray-800">
-                            Login to your account
-                        </h2>
-                        <p className="text-gray-500 text-sm font-medium">
-                            It's nice to see you. Ready to code?
-                        </p>
+            <div className="flex-1 flex flex-col items-center justify-center p-8 lg:p-16 relative bg-white lg:rounded-l-[40px] shadow-[-20px_0_50px_rgba(0,0,0,0.02)] z-20">
+                <div className="w-full max-w-[440px] space-y-12">
+                    <div className="space-y-4">
+                        <div className="inline-flex px-3 py-1 bg-blue-50 text-blue-600 rounded-full text-[10px] font-bold uppercase tracking-widest border border-blue-100">
+                            Authentication Required
+                        </div>
+                        <div>
+                            <h1 className="text-4xl font-black text-slate-900 tracking-tight mb-2">
+                                Welcome!
+                            </h1>
+                            <p className="text-slate-500 text-base font-medium">
+                                Step into the arena. Ready to conquer?
+                            </p>
+                        </div>
                     </div>
 
                     <form onSubmit={handleSubmit} className="space-y-6">
-                        <div className="space-y-4">
-                            <div className="relative group">
-                                <input
-                                    type="text"
-                                    required
-                                    className="w-full px-4 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1B4D6B]/20 focus:border-[#1B4D6B] transition-all text-gray-900 placeholder:text-gray-400"
-                                    placeholder="Your username or email"
-                                    value={identifier}
-                                    onChange={(e) => setIdentifier(e.target.value)}
-                                />
+                        <div className="space-y-5">
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Email Address</label>
+                                <div className="relative group">
+                                    <input
+                                        type="text"
+                                        required
+                                        className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all text-slate-900 placeholder:text-slate-400 shadow-sm"
+                                        placeholder="admin@example.com"
+                                        value={identifier}
+                                        onChange={(e) => setIdentifier(e.target.value)}
+                                    />
+                                </div>
                             </div>
-                            <div className="relative group">
-                                <input
-                                    type="password"
-                                    required
-                                    className="w-full px-4 py-4 bg-white border border-gray-200 rounded-xl outline-none focus:ring-2 focus:ring-[#1B4D6B]/20 focus:border-[#1B4D6B] transition-all text-gray-900 placeholder:text-gray-400"
-                                    placeholder="Your password"
-                                    value={password}
-                                    onChange={(e) => setPassword(e.target.value)}
-                                />
+                            <div className="space-y-2">
+                                <label className="text-[10px] font-bold text-slate-400 uppercase tracking-widest ml-1">Secret Password</label>
+                                <div className="relative group">
+                                    <input
+                                        type="password"
+                                        required
+                                        className="w-full px-5 py-4 bg-slate-50/50 border border-slate-200 rounded-2xl outline-none focus:ring-4 focus:ring-blue-500/10 focus:border-blue-500 focus:bg-white transition-all text-slate-900 placeholder:text-slate-400 shadow-sm"
+                                        placeholder="••••••••"
+                                        value={password}
+                                        onChange={(e) => setPassword(e.target.value)}
+                                    />
+                                </div>
                             </div>
                         </div>
-
-                        {/* <div className="flex items-center justify-between py-2">
-                            <div className="flex items-center">
-                                <input
-                                    id="remember-me"
-                                    name="remember-me"
-                                    type="checkbox"
-                                    className="h-4 w-4 rounded border-gray-300 text-[#1B4D6B] focus:ring-[#1B4D6B]"
-                                />
-                                <label htmlFor="remember-me" className="ml-2 block text-sm text-gray-600">
-                                    Remember me
-                                </label>
-                            </div>
-                            <div className="text-sm">
-                                <a href="#" className="font-semibold text-[#1B4D6B] hover:text-[#143950]">
-                                    Forgot password?
-                                </a>
-                            </div>
-                        </div> */}
 
                         <button
                             type="submit"
                             disabled={loading || !identifier || !password}
-                            className={`w-full py-4 px-6 font-bold rounded-xl transition-all flex items-center justify-center gap-2 ${identifier && password
-                                ? "bg-[#2563EB] hover:bg-[#1D4ED8] text-white shadow-lg hover:shadow-xl active:scale-[0.98]"
-                                : "bg-[#E5E7EB] text-gray-400 cursor-not-allowed shadow-none"
+                            className={`w-full py-5 px-6 font-bold rounded-2xl transition-all duration-300 flex items-center justify-center gap-3 active:scale-[0.98] ${(loading || !identifier || !password)
+                                    ? "bg-slate-100 text-slate-300 cursor-not-allowed shadow-none"
+                                    : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white shadow-[0_10px_20px_rgba(37,99,235,0.2)] hover:shadow-[0_15px_30px_rgba(37,99,235,0.3)] transform hover:-translate-y-1"
                                 }`}
                         >
                             {loading ? (
                                 <>
                                     <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
-                                    Logging in...
+                                    <span className="animate-pulse">Authorizing...</span>
                                 </>
                             ) : (
-                                "Log In"
+                                <>
+                                    <span>Access My Account</span>
+                                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                                    </svg>
+                                </>
                             )}
                         </button>
                     </form>
 
                     {/* Footer / Branding */}
-                    <div className="pt-12 flex flex-col items-center gap-6">
-                        <div className="flex items-center gap-2">
-                            <div className="h-px w-12 bg-gray-200"></div>
-                            <span className="text-xs font-bold text-gray-400 uppercase tracking-widest">Powered By</span>
-                            <div className="h-px w-12 bg-gray-200"></div>
+                    <div className="pt-8 flex flex-col items-center gap-6 border-t border-slate-100">
+                        <div className="flex items-center gap-4">
+                            <div className="h-px w-10 bg-slate-100"></div>
+                            <span className="text-[10px] font-bold text-slate-300 uppercase tracking-[0.2em]">Partner Hub</span>
+                            <div className="h-px w-10 bg-slate-100"></div>
                         </div>
                         <a
                             href="https://10pearls.com/"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="block grayscale transition-all hover:grayscale-0 active:scale-95"
+                            className="block transition-all hover:scale-105 active:scale-95 duration-500"
                         >
                             <Image
                                 src="/10pearls_logo.png"
                                 alt="10Pearls"
-                                width={180}
-                                height={60}
+                                width={160}
+                                height={50}
                                 className="object-contain"
                             />
                         </a>

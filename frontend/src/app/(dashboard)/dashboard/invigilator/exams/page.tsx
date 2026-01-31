@@ -17,6 +17,10 @@ export default function ExamsPage() {
     const [searchTerm, setSearchTerm] = useState('');
     const [isModalOpen, setIsModalOpen] = useState(false);
     const [editingExam, setEditingExam] = useState<any>(null);
+    const [showDeleteModal, setShowDeleteModal] = useState(false);
+    const [deletingId, setDeletingId] = useState<number | null>(null);
+    const [isSaving, setIsSaving] = useState(false);
+
 
     // Form state
     const [formData, setFormData] = useState({
@@ -47,6 +51,7 @@ export default function ExamsPage() {
     const handleSaveExam = async (e: React.FormEvent) => {
         e.preventDefault();
         try {
+            setIsSaving(true);
             const payload = {
                 ...formData,
                 scheduled_start: new Date(formData.scheduled_start).toISOString(),
@@ -67,8 +72,11 @@ export default function ExamsPage() {
             fetchInitialData();
         } catch (error: any) {
             showToast(error.response?.data?.message || 'Failed to save exam', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
+
 
     const resetForm = () => {
         setFormData({
@@ -113,16 +121,27 @@ export default function ExamsPage() {
         setIsModalOpen(true);
     };
 
-    const handleDeleteExam = async (id: number) => {
-        if (!confirm('Are you sure you want to delete this exam?')) return;
+    const handleDeleteExam = (id: number) => {
+        setDeletingId(id);
+        setShowDeleteModal(true);
+    };
+
+    const confirmDelete = async () => {
+        if (!deletingId || isSaving) return;
         try {
-            await api.delete(`/exams/${id}`);
+            setIsSaving(true);
+            await api.delete(`/exams/${deletingId}`);
             showToast('Exam deleted successfully!', 'success');
+            setShowDeleteModal(false);
+            setDeletingId(null);
             fetchInitialData();
         } catch (error: any) {
             showToast(error.response?.data?.message || 'Failed to delete exam', 'error');
+        } finally {
+            setIsSaving(false);
         }
     };
+
 
     const toggleDesignation = (des: string) => {
         if (user?.role === 'invigilator') return; // Cannot change own designation
@@ -390,19 +409,67 @@ export default function ExamsPage() {
                             <div className="flex justify-end gap-3 mt-8 pt-4 border-t border-gray-100">
                                 <button
                                     type="button"
-                                    onClick={() => setIsModalOpen(false)}
-                                    className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition-colors"
+                                    disabled={isSaving}
+                                    onClick={() => { setIsModalOpen(false); setEditingExam(null); resetForm(); }}
+                                    className="px-4 py-2 text-gray-500 hover:bg-gray-100 rounded-lg transition-colors font-medium disabled:opacity-50"
                                 >
                                     Cancel
                                 </button>
                                 <button
                                     type="submit"
-                                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-medium"
+                                    disabled={isSaving}
+                                    className="px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors shadow-sm font-bold disabled:bg-green-400 flex items-center gap-2"
                                 >
-                                    {editingExam ? 'Update Exam' : 'Create Exam'}
+                                    {isSaving ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                            <span>{editingExam ? 'Updating...' : 'Creating...'}</span>
+                                        </>
+                                    ) : (
+                                        <>{editingExam ? 'Update' : 'Create'} Exam</>
+                                    )}
                                 </button>
                             </div>
+
                         </form>
+                    </div>
+                </div>
+            )}
+
+            {/* Custom Delete Confirmation Modal */}
+            {showDeleteModal && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowDeleteModal(false)}></div>
+                    <div className="bg-white rounded-3xl p-8 max-w-sm w-full relative z-10 text-center shadow-2xl animate-in fade-in zoom-in duration-300">
+                        <div className="w-20 h-20 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <Trash2 className="w-10 h-10 text-red-600" />
+                        </div>
+                        <h2 className="text-2xl font-black text-gray-900 mb-2 tracking-tight">DELETE EXAM?</h2>
+                        <p className="text-sm text-gray-500 mb-8 font-medium">
+                            This action is permanent and will delete all associated student records and responses.
+                        </p>
+                        <div className="flex gap-4">
+                            <button
+                                onClick={() => setShowDeleteModal(false)}
+                                disabled={isSaving}
+                                className="flex-1 px-4 py-3 border border-gray-200 text-gray-500 rounded-xl hover:bg-gray-50 transition-colors font-bold text-sm disabled:opacity-50"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={confirmDelete}
+                                disabled={isSaving}
+                                className="flex-1 px-4 py-3 bg-red-600 text-white rounded-xl hover:bg-red-700 transition-colors font-bold text-sm shadow-lg shadow-red-100 flex items-center justify-center gap-2 disabled:bg-red-400"
+                            >
+                                {isSaving ? (
+                                    <>
+                                        <Loader2 className="w-4 h-4 animate-spin" />
+                                        <span>Deleting...</span>
+                                    </>
+                                ) : 'Delete Exam'}
+                            </button>
+                        </div>
+
                     </div>
                 </div>
             )}

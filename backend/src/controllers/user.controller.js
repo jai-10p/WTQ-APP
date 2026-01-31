@@ -1,4 +1,4 @@
-const { User } = require('../models');
+const { User, Question, Exam, ExamAttempt, StudentAnswer, ExamResult } = require('../models');
 const ApiResponse = require('../utils/apiResponse');
 
 /**
@@ -72,17 +72,44 @@ const updateUser = async (req, res) => {
  */
 const deleteUser = async (req, res) => {
     try {
-        const user = await User.findByPk(req.params.id);
+        const userId = req.params.id;
+        const user = await User.findByPk(userId);
         if (!user) {
             return ApiResponse.notFound(res, 'User not found');
         }
 
+        const adminId = req.user.id;
+
+        // 1. Reassign exams and questions to the admin
+        if (user.role === 'invigilator' || user.role === 'admin') {
+            await Promise.all([
+                Question.update({ created_by: adminId }, { where: { created_by: userId } }),
+                Exam.update({ created_by: adminId }, { where: { created_by: userId } })
+            ]);
+        }
+
+        // 2. Manually handle cascading for exam attempts
+        // This is necessary because some DB environments might not have the correct CASCADE setup
+        const attempts = await ExamAttempt.findAll({ where: { student_id: userId } });
+        const attemptIds = attempts.map(a => a.id);
+
+        if (attemptIds.length > 0) {
+            await Promise.all([
+                StudentAnswer.destroy({ where: { attempt_id: attemptIds } }),
+                ExamResult.destroy({ where: { attempt_id: attemptIds } })
+            ]);
+            await ExamAttempt.destroy({ where: { id: attemptIds } });
+        }
+
+        // 3. Final deletion of the user
         await user.destroy();
-        return ApiResponse.success(res, null, 'User deleted successfully');
+
+        return ApiResponse.success(res, null, 'User deleted successfully. Their created content has been preserved.');
     } catch (error) {
         return ApiResponse.error(res, error.message);
     }
 };
+
 
 const bcrypt = require('bcryptjs');
 

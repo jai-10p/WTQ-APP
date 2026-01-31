@@ -5,6 +5,19 @@
 
 const { body, param } = require('express-validator');
 
+// Helper to validate URL or relative path
+const isValidUrlOrPath = (url) => {
+    // Accept relative paths starting with /
+    if (typeof url === 'string' && url.startsWith('/')) return true;
+    // Accept full URLs
+    try {
+        new URL(url);
+        return true;
+    } catch {
+        return false;
+    }
+};
+
 const createQuestionValidator = [
     body('category')
         .notEmpty()
@@ -21,8 +34,22 @@ const createQuestionValidator = [
     body('image_url')
         .optional()
         .trim()
-        .isURL()
-        .withMessage('Image URL must be a valid URL'),
+        .custom((value) => {
+            if (value === null || value === '' || value === undefined) return true;
+            try {
+                // Check if it's a JSON array of URLs or paths
+                if (value.startsWith('[')) {
+                    const urls = JSON.parse(value);
+                    if (!Array.isArray(urls)) throw new Error('Must be an array');
+                    if (!urls.every(url => isValidUrlOrPath(url))) throw new Error('Invalid URL/path');
+                    return true;
+                }
+                // Single URL or path
+                return isValidUrlOrPath(value);
+            } catch {
+                throw new Error('Image URL must be a valid URL, path, or JSON array');
+            }
+        }),
     body('difficulty')
         .optional()
         .isIn(['easy', 'medium', 'hard'])
@@ -76,12 +103,19 @@ const updateQuestionValidator = [
         .optional()
         .trim()
         .custom((value) => {
-            if (value === null || value === '') return true;
+            if (value === null || value === '' || value === undefined) return true;
             try {
-                new URL(value);
-                return true;
+                // Check if it's a JSON array of URLs or paths
+                if (value.startsWith('[')) {
+                    const urls = JSON.parse(value);
+                    if (!Array.isArray(urls)) throw new Error('Must be an array');
+                    if (!urls.every(url => isValidUrlOrPath(url))) throw new Error('Invalid URL/path');
+                    return true;
+                }
+                // Single URL or path
+                return isValidUrlOrPath(value);
             } catch {
-                throw new Error('Image URL must be a valid URL');
+                throw new Error('Image URL must be a valid URL, path, or JSON array');
             }
         }),
     body('difficulty')

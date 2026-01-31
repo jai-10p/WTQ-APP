@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from 'react';
-import { BookOpen, Calendar, Clock, Play, Loader2, Search, Filter, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Calendar, Clock, Play, Loader2, Search, Filter, CheckCircle2, AlertTriangle, Ban, Info, ShieldCheck, Zap } from 'lucide-react';
 import api from '@/services/api';
 import { useRouter } from 'next/navigation';
 import { useToast } from '@/context/ToastContext';
@@ -13,6 +13,8 @@ export default function StudentExamsPage() {
     const [loading, setLoading] = useState(true);
     const [searchTerm, setSearchTerm] = useState('');
     const [startingId, setStartingId] = useState<number | null>(null);
+    const [showInstructionsModal, setShowInstructionsModal] = useState(false);
+    const [selectedExam, setSelectedExam] = useState<any>(null);
 
     useEffect(() => {
         fetchExams();
@@ -29,9 +31,21 @@ export default function StudentExamsPage() {
         }
     };
 
-    const handleStartExam = async (examId: number) => {
+    const handleStartClick = (exam: any) => {
+        if (exam.attempt_status === 'in_progress') {
+            // Resume immediately
+            processStartExam(exam.id);
+        } else {
+            // Show instructions for new attempt
+            setSelectedExam(exam);
+            setShowInstructionsModal(true);
+        }
+    };
+
+    const processStartExam = async (examId: number) => {
         try {
             setStartingId(examId);
+            setShowInstructionsModal(false);
             const response: any = await api.post(`/student/exams/${examId}/start`);
             const { attempt_id } = response.data.data;
             router.push(`/exam/${attempt_id}`);
@@ -56,22 +70,7 @@ export default function StudentExamsPage() {
                 <p className="text-gray-500 mt-1">Take your scheduled assessments and track your progress.</p>
             </div>
 
-            <div className="bg-white p-4 rounded-xl shadow-sm border border-gray-100 flex flex-col sm:flex-row gap-4">
-                <div className="relative flex-1">
-                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
-                    <input
-                        type="text"
-                        placeholder="Search by exam title..."
-                        className="w-full pl-10 pr-4 py-2 border border-gray-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
-                        value={searchTerm}
-                        onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                </div>
-                <button className="flex items-center justify-center gap-2 px-4 py-2 border border-gray-200 rounded-lg hover:bg-gray-50 text-gray-600 transition-colors">
-                    <Filter className="w-4 h-4" />
-                    Filters
-                </button>
-            </div>
+            <br />
 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 {loading ? (
@@ -116,6 +115,12 @@ export default function StudentExamsPage() {
                                             Exam Submitted
                                         </div>
                                     )}
+                                    {exam.attempt_status === 'disqualified' && (
+                                        <div className="flex items-center gap-3 text-sm font-bold text-red-600 bg-red-50 px-3 py-1.5 rounded-lg border border-red-100 shadow-sm animate-bounce-short">
+                                            <AlertTriangle className="w-4 h-4 text-red-500" />
+                                            Disqualified (Cheating Detected)
+                                        </div>
+                                    )}
                                 </div>
 
                                 {(() => {
@@ -125,14 +130,17 @@ export default function StudentExamsPage() {
                                     const isNotStarted = now < startTime;
                                     const isEnded = now > endTime;
 
-                                    if (exam.attempt_status === 'submitted') {
+                                    if (exam.attempt_status === 'submitted' || exam.attempt_status === 'disqualified') {
                                         return (
                                             <button
                                                 disabled
-                                                className="w-full flex items-center justify-center gap-2 bg-gray-100 text-gray-400 font-bold py-3 rounded-xl cursor-not-allowed border border-gray-200"
+                                                className={`w-full flex items-center justify-center gap-2 font-bold py-3 rounded-xl cursor-not-allowed border 
+                                                    ${exam.attempt_status === 'disqualified'
+                                                        ? 'bg-red-100 text-red-500 border-red-200'
+                                                        : 'bg-gray-100 text-gray-400 border-gray-200'}`}
                                             >
-                                                <CheckCircle2 className="w-4 h-4" />
-                                                Completed
+                                                {exam.attempt_status === 'disqualified' ? <Ban className="w-4 h-4" /> : <CheckCircle2 className="w-4 h-4" />}
+                                                {exam.attempt_status === 'disqualified' ? 'Disqualified' : 'Completed'}
                                             </button>
                                         );
                                     }
@@ -163,7 +171,7 @@ export default function StudentExamsPage() {
 
                                     return (
                                         <button
-                                            onClick={() => handleStartExam(exam.id)}
+                                            onClick={() => handleStartClick(exam)}
                                             disabled={startingId === exam.id}
                                             className="w-full flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold py-3 rounded-xl transition-colors shadow-sm"
                                         >
@@ -183,6 +191,106 @@ export default function StudentExamsPage() {
                     ))
                 )}
             </div>
+
+            {/* Instructions Modal */}
+            {showInstructionsModal && selectedExam && (
+                <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+                    <div className="absolute inset-0 bg-gray-900/60 backdrop-blur-sm" onClick={() => setShowInstructionsModal(false)}></div>
+                    <div className="bg-white rounded-3xl shadow-2xl max-w-2xl w-full relative z-10 overflow-hidden animate-in fade-in zoom-in duration-300">
+                        <div className="bg-blue-600 p-8 text-white relative">
+                            <div className="absolute top-0 right-0 p-8 opacity-10">
+                                <ShieldCheck className="w-32 h-32" />
+                            </div>
+                            <h2 className="text-3xl font-black mb-2 flex items-center gap-3">
+                                <Info className="w-8 h-8" />
+                                Exam Instructions
+                            </h2>
+                            <p className="text-blue-100 font-medium">Please read these rules carefully before starting <span className="text-white font-bold">"{selectedExam.exam_title}"</span>.</p>
+                        </div>
+
+                        <div className="p-8 space-y-6">
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div className="p-4 bg-red-50 rounded-2xl border border-red-100 flex gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-red-100 flex items-center justify-center shrink-0">
+                                        <Ban className="w-5 h-5 text-red-600" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-red-900 text-sm">Anti-Cheating</h4>
+                                        <p className="text-xs text-red-700 mt-1 leading-relaxed">Tab switching or window minimizing is strictly prohibited. You will get ONE warning, then disqualification.</p>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-amber-100 flex items-center justify-center shrink-0">
+                                        <Clock className="w-5 h-5 text-amber-600" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-amber-900 text-sm">Time Limit</h4>
+                                        <p className="text-xs text-amber-700 mt-1 leading-relaxed">The exam duration is <strong>{selectedExam.duration_minutes} minutes</strong>. The auto-timer starts as soon as you confirm.</p>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-blue-50 rounded-2xl border border-blue-100 flex gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-blue-100 flex items-center justify-center shrink-0">
+                                        <Zap className="w-5 h-5 text-blue-600" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-blue-900 text-sm">Action Items</h4>
+                                        <p className="text-xs text-blue-700 mt-1 leading-relaxed">Copy-pasting of code or solutions is disabled. Focus on writing original logic.</p>
+                                    </div>
+                                </div>
+                                <div className="p-4 bg-green-50 rounded-2xl border border-green-100 flex gap-4">
+                                    <div className="w-10 h-10 rounded-xl bg-green-100 flex items-center justify-center shrink-0">
+                                        <CheckCircle2 className="w-5 h-5 text-green-600" />
+                                    </div>
+                                    <div>
+                                        <h4 className="font-bold text-green-900 text-sm">Submission</h4>
+                                        <p className="text-xs text-green-700 mt-1 leading-relaxed">Ensure all answers are saved before final submission. Review your progress in the navigation panel.</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div className="bg-gray-50 p-6 rounded-2xl border border-gray-100">
+                                <ul className="space-y-3">
+                                    <li className="flex items-start gap-3 text-sm text-gray-600">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+                                        <span>Use a stable internet connection throughout the exam.</span>
+                                    </li>
+                                    <li className="flex items-start gap-3 text-sm text-gray-600">
+                                        <div className="w-1.5 h-1.5 rounded-full bg-blue-400 mt-1.5 shrink-0" />
+                                        <span>You cannot retake the exam once it is submitted or disqualified.</span>
+                                    </li>
+                                </ul>
+                            </div>
+                        </div>
+
+                        <div className="p-8 pt-0 flex gap-4">
+                            <button
+                                onClick={() => setShowInstructionsModal(false)}
+                                className="flex-1 py-4 bg-gray-100 hover:bg-gray-200 text-gray-700 font-bold rounded-2xl transition-all"
+                            >
+                                Cancel
+                            </button>
+                            <button
+                                onClick={() => processStartExam(selectedExam.id)}
+                                disabled={startingId === selectedExam.id}
+                                className="flex-[2] py-4 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-2xl shadow-lg shadow-blue-200 transition-all flex items-center justify-center gap-2"
+                            >
+                                {startingId === selectedExam.id ? (
+                                    <>
+                                        <Loader2 className="w-5 h-5 animate-spin" />
+                                        <span>Initialising...</span>
+                                    </>
+                                ) : (
+                                    <>
+                                        <Play className="w-5 h-5 fill-current" />
+                                        <span>I Understand, Start Exam</span>
+                                    </>
+                                )}
+                            </button>
+
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

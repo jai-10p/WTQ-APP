@@ -26,7 +26,7 @@ const storage = multer.diskStorage({
         let dest = tempDir;
 
         // Determine destination based on file type or field name
-        if (file.fieldname === 'image' || file.mimetype.startsWith('image/')) {
+        if (file.fieldname === 'image' || file.fieldname === 'images' || file.mimetype.startsWith('image/')) {
             dest = questionsDir;
         }
 
@@ -39,23 +39,26 @@ const storage = multer.diskStorage({
     },
 });
 
-/**
- * File filter
- */
 const fileFilter = (req, file, cb) => {
     if (file.fieldname === 'file') {
-        // CSV validation
+        // CSV and Excel validation
+        const allowedMimeTypes = [
+            'text/csv',
+            'application/csv',
+            'application/vnd.ms-excel',
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+        ];
+        const allowedExtensions = ['.csv', '.xls', '.xlsx'];
+
         if (
-            file.mimetype === 'text/csv' ||
-            file.mimetype === 'application/csv' ||
-            file.mimetype === 'application/vnd.ms-excel' ||
-            file.originalname.endsWith('.csv')
+            allowedMimeTypes.includes(file.mimetype) ||
+            allowedExtensions.some(ext => file.originalname.toLowerCase().endsWith(ext))
         ) {
             cb(null, true);
         } else {
-            cb(new Error('Only CSV files are allowed'), false);
+            cb(new Error('Only CSV and Excel files are allowed'), false);
         }
-    } else if (file.fieldname === 'image') {
+    } else if (file.fieldname === 'image' || file.fieldname === 'images') {
         // Image validation
         if (file.mimetype.startsWith('image/')) {
             cb(null, true);
@@ -66,6 +69,7 @@ const fileFilter = (req, file, cb) => {
         cb(new Error('Unexpected field name'), false);
     }
 };
+
 
 /**
  * Multer instance
@@ -100,4 +104,15 @@ const handleUpload = (fieldName) => (req, res, next) => {
 module.exports = {
     uploadCSV: handleUpload('file'),
     uploadImage: handleUpload('image'),
+    uploadImages: (req, res, next) => {
+        const uploader = upload.array('images', 3);
+        uploader(req, res, (err) => {
+            if (err instanceof multer.MulterError) {
+                return ApiResponse.error(res, err.message, 400);
+            } else if (err) {
+                return ApiResponse.error(res, err.message, 400);
+            }
+            next();
+        });
+    }
 };
