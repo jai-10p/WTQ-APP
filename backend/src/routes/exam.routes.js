@@ -134,4 +134,17 @@ router.get(
     examController.getExamAttempts
 );
 
+/**
+ * @route   POST /api/v1/exams/attempts/:attemptId/allow-resume
+ * @desc    Allow disqualified student to resume exam
+ * @access  Admin, Invigilator
+ */
+router.post(
+    '/attempts/:attemptId/allow-resume',
+    authenticate,
+    authorize('admin', 'invigilator'),
+    examController.allowResume
+);
+
+
 module.exports = router;

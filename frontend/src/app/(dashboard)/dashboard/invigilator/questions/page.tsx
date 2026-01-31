@@ -19,6 +19,13 @@ import api from '@/services/api';
 import { useAuth } from '@/context/AuthContext';
 import { useToast } from '@/context/ToastContext';
 
+const getMediaUrl = (path: string) => {
+    if (!path) return '';
+    if (path.startsWith('http') || path.startsWith('data:')) return path;
+    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:5000';
+    return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+};
+
 export default function QuestionsPage() {
     const { user } = useAuth();
     const { showToast } = useToast();
@@ -56,7 +63,27 @@ export default function QuestionsPage() {
         fetchInitialData();
     }, []);
 
+    const removeImage = (index: number) => {
+        try {
+            if (formData.image_url.startsWith('[')) {
+                const images = JSON.parse(formData.image_url);
+                images.splice(index, 1);
+                setFormData(prev => ({
+                    ...prev,
+                    image_url: images.length > 0 ? JSON.stringify(images) : ''
+                }));
+            } else {
+                // If it was a single string, just clear it
+                setFormData(prev => ({ ...prev, image_url: '' }));
+            }
+        } catch (e) {
+            console.error('Failed to remove image:', e);
+            setFormData(prev => ({ ...prev, image_url: '' }));
+        }
+    };
+
     const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+
         const files = e.target.files;
         if (!files || files.length === 0) return;
 
@@ -190,10 +217,14 @@ export default function QuestionsPage() {
             delete dataToSave.test_cases;
         }
 
-        // Remove image_url for non-SQL questions or if empty
-        if (formData.question_type !== 'sql' || !dataToSave.image_url || dataToSave.image_url === '') {
+        // For SQL questions, if image_url is cleared, set it to null so the backend updates it
+        if (formData.question_type === 'sql' && (!formData.image_url || formData.image_url === '')) {
+            dataToSave.image_url = null;
+        } else if (formData.question_type !== 'sql') {
+            // For non-SQL types, we don't use images yet, so keep it clean
             delete dataToSave.image_url;
         }
+
 
         console.log('💾 Saving question:', dataToSave);
         console.log('💾 Question type:', dataToSave.question_type);
@@ -571,17 +602,48 @@ export default function QuestionsPage() {
                                             {(() => {
                                                 try {
                                                     if (formData.image_url.startsWith('[')) {
-                                                        return JSON.parse(formData.image_url).map((url: string, idx: number) => (
+                                                        const images = JSON.parse(formData.image_url);
+                                                        return images.map((url: string, idx: number) => (
                                                             <div key={idx} className="relative group">
-                                                                <img src={url} alt="" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />
+                                                                <img
+                                                                    src={getMediaUrl(url)}
+                                                                    alt=""
+                                                                    className="w-20 h-20 object-cover rounded-lg border border-gray-200 transition-all group-hover:opacity-75"
+                                                                />
+                                                                <button
+                                                                    type="button"
+                                                                    onClick={() => removeImage(idx)}
+                                                                    className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                                                >
+                                                                    <X className="w-3 h-3" />
+                                                                </button>
                                                             </div>
                                                         ));
                                                     }
                                                 } catch (e) { }
-                                                return <img src={formData.image_url} alt="" className="w-20 h-20 object-cover rounded-lg border border-gray-200" />;
+
+                                                // Fallback for single image string
+                                                return (
+                                                    <div className="relative group">
+                                                        <img
+                                                            src={getMediaUrl(formData.image_url)}
+                                                            alt=""
+                                                            className="w-20 h-20 object-cover rounded-lg border border-gray-200"
+                                                        />
+                                                        <button
+                                                            type="button"
+                                                            onClick={() => setFormData(prev => ({ ...prev, image_url: '' }))}
+                                                            className="absolute -top-1.5 -right-1.5 bg-red-500 text-white rounded-full p-1 shadow-md opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-600"
+                                                        >
+                                                            <X className="w-3 h-3" />
+                                                        </button>
+                                                    </div>
+                                                );
                                             })()}
                                         </div>
                                     )}
+
+
                                 </div>
                             )}
 

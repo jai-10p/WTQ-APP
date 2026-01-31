@@ -443,6 +443,67 @@ const getExamAttempts = async (req, res, next) => {
     }
 };
 
+/**
+ * Allow disqualified student to resume exam
+ * @route POST /api/v1/exams/attempts/:attemptId/allow-resume
+ * @access Admin, Invigilator
+ */
+const allowResume = async (req, res, next) => {
+    const transaction = await require('../models').sequelize.transaction();
+    try {
+        const { attemptId } = req.params;
+        const { ExamAttempt, ExamResult, Exam } = require('../models');
+
+        const attempt = await ExamAttempt.findByPk(attemptId, {
+            include: [{ model: Exam, as: 'exam' }],
+            transaction
+        });
+
+        if (!attempt) {
+            await transaction.rollback();
+            return ApiResponse.notFound(res, 'Exam attempt not found');
+        }
+
+        // Authorization check
+        const exam = attempt.exam;
+        if (req.user.role !== 'admin' && exam.created_by !== req.user.id) {
+            const userDesignation = req.user.designation;
+            const isAuthorizedByDesignation = exam.allowed_designations &&
+                exam.allowed_designations.includes(`"${userDesignation}"`);
+
+            if (!isAuthorizedByDesignation) {
+                await transaction.rollback();
+                return ApiResponse.forbidden(res, 'You are not authorized to manage this exam');
+            }
+        }
+
+        if (attempt.status !== 'disqualified') {
+            await transaction.rollback();
+            return ApiResponse.error(res, 'Only disqualified attempts can be resumed', 400);
+        }
+
+        // Reset attempt status
+        await attempt.update({
+            status: 'in_progress',
+            submitted_at: null
+        }, { transaction });
+
+        // Delete associated result if exists
+        await ExamResult.destroy({
+            where: { attempt_id: attemptId },
+            transaction
+        });
+
+        await transaction.commit();
+
+        return ApiResponse.success(res, null, 'Student allowed to resume exam successfully');
+    } catch (error) {
+        if (transaction) await transaction.rollback();
+        next(error);
+    }
+};
+
+
 module.exports = {
     createExam,
     getAllExams,
@@ -453,4 +514,6 @@ module.exports = {
     removeQuestion,
     getExamQuestions,
     getExamAttempts,
+    allowResume,
 };
+

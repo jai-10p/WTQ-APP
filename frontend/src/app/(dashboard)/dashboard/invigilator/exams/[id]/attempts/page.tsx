@@ -14,8 +14,10 @@ import {
     UserCheck,
     Clock,
     AlertTriangle,
-    Ban
+    Ban,
+    RotateCcw
 } from 'lucide-react';
+
 import api from '@/services/api';
 import { useToast } from '@/context/ToastContext';
 import Link from 'next/link';
@@ -102,7 +104,21 @@ export default function ExamAttemptsPage() {
         document.body.removeChild(link);
     };
 
+    const handleAllowResume = async (attemptId: number) => {
+        try {
+            setLoading(true);
+            await api.post(`/exams/attempts/${attemptId}/allow-resume`);
+            showToast('Student is now allowed to resume the exam', 'success');
+            fetchData();
+        } catch (error: any) {
+            showToast(error.response?.data?.message || 'Failed to update student status', 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
     if (loading) {
+
         return (
             <div className="h-[60vh] flex flex-col items-center justify-center">
                 <Loader2 className="w-10 h-10 animate-spin text-green-600 mb-4" />
@@ -272,13 +288,25 @@ export default function ExamAttemptsPage() {
                                             </div>
                                         </td>
                                         <td className="px-6 py-4 text-right">
-                                            <Link
-                                                href={`/dashboard/student/results/${attempt.id}`}
-                                                className="inline-flex items-center gap-2 text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 border border-blue-100 px-3 py-2 rounded-lg transition-all uppercase tracking-widest"
-                                            >
-                                                Full Report
-                                            </Link>
+                                            <div className="flex items-center justify-end gap-2">
+                                                {attempt.status === 'disqualified' && (
+                                                    <button
+                                                        onClick={() => handleAllowResume(attempt.id)}
+                                                        className="inline-flex items-center gap-2 text-[10px] font-bold text-green-600 hover:text-green-700 bg-green-50 border border-green-100 px-3 py-2 rounded-lg transition-all uppercase tracking-widest"
+                                                    >
+                                                        <RotateCcw className="w-3 h-3" />
+                                                        Allow Resume
+                                                    </button>
+                                                )}
+                                                <Link
+                                                    href={`/dashboard/student/results/${attempt.id}`}
+                                                    className="inline-flex items-center gap-2 text-[10px] font-bold text-blue-600 hover:text-blue-700 bg-blue-50 border border-blue-100 px-3 py-2 rounded-lg transition-all uppercase tracking-widest"
+                                                >
+                                                    Full Report
+                                                </Link>
+                                            </div>
                                         </td>
+
                                     </tr>
                                 ))
                             )}

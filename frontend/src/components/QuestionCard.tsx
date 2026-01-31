@@ -205,27 +205,30 @@ export function QuestionCard({
                         {question.image_url && (
                             <div className="flex flex-wrap justify-center gap-4 bg-gray-50 rounded-lg p-4 border border-gray-100">
                                 {(() => {
-                                    const backendUrl = 'http://localhost:5000';
+                                    const baseUrl = process.env.NEXT_PUBLIC_API_URL?.replace('/api/v1', '') || 'http://localhost:5000';
+                                    const getFullUrl = (path: string) => {
+                                        if (!path) return '';
+                                        if (path.startsWith('http') || path.startsWith('data:')) return path;
+                                        return `${baseUrl}${path.startsWith('/') ? '' : '/'}${path}`;
+                                    };
+
                                     try {
                                         if (question.image_url.startsWith('[')) {
-                                            return JSON.parse(question.image_url).map((url: string, idx: number) => {
-                                                const fullUrl = url.startsWith('/') ? `${backendUrl}${url}` : url;
-                                                return (
-                                                    <img
-                                                        key={idx}
-                                                        src={fullUrl}
-                                                        alt={`Context ${idx + 1}`}
-                                                        className="max-h-80 object-contain rounded-md shadow-sm border border-gray-200"
-                                                    />
-                                                );
-                                            });
+                                            return JSON.parse(question.image_url).map((url: string, idx: number) => (
+                                                <img
+                                                    key={idx}
+                                                    src={getFullUrl(url)}
+                                                    alt={`Context ${idx + 1}`}
+                                                    className="max-h-80 object-contain rounded-md shadow-sm border border-gray-200"
+                                                />
+                                            ));
                                         }
                                     } catch (e) { }
-                                    const fullUrl = question.image_url.startsWith('/') ? `${backendUrl}${question.image_url}` : question.image_url;
-                                    return <img src={fullUrl} alt="Question context" className="max-h-80 object-contain rounded-md shadow-sm" />;
+                                    return <img src={getFullUrl(question.image_url)} alt="Question context" className="max-h-80 object-contain rounded-md shadow-sm" />;
                                 })()}
                             </div>
                         )}
+
 
                         <div className="bg-gray-900 rounded-lg overflow-hidden border border-gray-800 shadow-xl">
                             <div className="bg-gray-800 px-4 py-2 flex items-center justify-between border-b border-gray-700">
