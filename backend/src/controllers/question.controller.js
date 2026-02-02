@@ -616,8 +616,8 @@ const runSQL = async (req, res, next) => {
                 return ApiResponse.error(res, 'Access to system tables is restricted.', 403);
             }
 
-            // 2. Disable restrictive modes for this session to be more student-friendly
-            await sequelize.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));", { transaction });
+            // 2. Disable all restrictive modes for this session to be student-friendly (handles ONLY_FULL_GROUP_BY)
+            await sequelize.query("SET SESSION sql_mode = '';", { transaction });
             try {
                 await sequelize.query("SET SESSION sql_require_primary_key = OFF;", { transaction });
             } catch (pkError) {

@@ -807,8 +807,8 @@ const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
     try {
         const transaction = await sequelize.transaction();
         try {
-            // Disable restrictive modes for grading execution
-            await sequelize.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));", { transaction });
+            // Disable all restrictive modes for grading execution (handles ONLY_FULL_GROUP_BY)
+            await sequelize.query("SET SESSION sql_mode = '';", { transaction });
             try {
                 await sequelize.query("SET SESSION sql_require_primary_key = OFF;", { transaction });
             } catch (pkError) {
