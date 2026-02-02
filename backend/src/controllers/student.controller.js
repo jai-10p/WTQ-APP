@@ -807,8 +807,13 @@ const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
     try {
         const transaction = await sequelize.transaction();
         try {
-            // Disable ONLY_FULL_GROUP_BY for grading execution
+            // Disable restrictive modes for grading execution
             await sequelize.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));", { transaction });
+            try {
+                await sequelize.query("SET SESSION sql_require_primary_key = OFF;", { transaction });
+            } catch (pkError) {
+                // Ignore if not supported by the environment
+            }
 
             if (schema) {
                 const sandboxSchema = schema.replace(/\bCREATE\s+(?:TEMPORARY\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`"']?)([a-zA-Z0-9_]+)\1/gi, 'DROP TEMPORARY TABLE IF EXISTS $1$2$1; CREATE TEMPORARY TABLE $1$2$1');

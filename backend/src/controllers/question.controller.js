@@ -616,8 +616,13 @@ const runSQL = async (req, res, next) => {
                 return ApiResponse.error(res, 'Access to system tables is restricted.', 403);
             }
 
-            // 2. Disable ONLY_FULL_GROUP_BY for this session to be more student-friendly
+            // 2. Disable restrictive modes for this session to be more student-friendly
             await sequelize.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));", { transaction });
+            try {
+                await sequelize.query("SET SESSION sql_require_primary_key = OFF;", { transaction });
+            } catch (pkError) {
+                console.warn('Could not disable sql_require_primary_key:', pkError.message);
+            }
 
             // 3. Set up the schema if provided
             if (database_schema) {
