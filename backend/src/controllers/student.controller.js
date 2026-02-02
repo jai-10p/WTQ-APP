@@ -763,6 +763,21 @@ const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
                 for (const s of statements) await sequelize.query(s, { transaction });
             }
 
+            // Security Check for student SQL during grading
+            const trimmedSql = studentSQL.trim().toUpperCase();
+            const dangerousKeywords = ['DROP', 'TRUNCATE', 'ALTER', 'DELETE', 'UPDATE', 'INSERT', 'CREATE', 'GRANT', 'REVOKE', 'REPLACE'];
+
+            // Block multi-statements and dangerous keywords
+            if (studentSQL.includes(';') || dangerousKeywords.some(kw => trimmedSql.includes(kw))) {
+                return false; // Fail the question if dangerous SQL is detected
+            }
+
+            // Block access to sensitive tables
+            const sensitiveTables = ['users', 'exams', 'exam_attempts', 'student_answers', 'exam_results', 'exam_questions', 'sessions', 'categories'];
+            if (sensitiveTables.some(table => trimmedSql.includes(table))) {
+                return false;
+            }
+
             const [studentResults] = await sequelize.query(studentSQL, { transaction });
             const [referenceResults] = await sequelize.query(referenceSQL, { transaction });
 

@@ -126,13 +126,20 @@ const getAllQuestions = async (req, res, next) => {
             };
         }
 
+        const isStaff = req.user && (req.user.role === 'admin' || req.user.role === 'invigilator');
+
         const { count, rows: questions } = await Question.findAndCountAll({
             where: whereClause,
+            attributes: isStaff
+                ? undefined
+                : ['id', 'question_text', 'image_url', 'question_type', 'difficulty', 'weightage', 'category', 'is_active', 'created_at'],
             include: [
                 {
                     model: MCQOption,
                     as: 'options',
-                    attributes: ['id', 'option_text', 'is_correct', 'display_order'],
+                    attributes: isStaff
+                        ? ['id', 'option_text', 'is_correct', 'display_order']
+                        : ['id', 'option_text', 'display_order'],
                 },
             ],
             limit: parseInt(limit),
@@ -163,14 +170,22 @@ const getQuestionById = async (req, res, next) => {
     try {
         const { id } = req.params;
 
+        const isStaff = req.user && (req.user.role === 'admin' || req.user.role === 'invigilator');
+
         const question = await Question.findByPk(id, {
+            attributes: isStaff
+                ? undefined
+                : ['id', 'question_text', 'image_url', 'question_type', 'difficulty', 'weightage', 'category', 'is_active', 'created_at'],
             include: [
                 {
                     model: MCQOption,
                     as: 'options',
-                    order: [['display_order', 'ASC']],
+                    attributes: isStaff
+                        ? ['id', 'option_text', 'is_correct', 'display_order']
+                        : ['id', 'option_text', 'display_order'],
                 },
             ],
+            order: [[{ model: MCQOption, as: 'options' }, 'display_order', 'ASC']]
         });
 
         if (!question) {
@@ -606,7 +621,30 @@ const runSQL = async (req, res, next) => {
                 }
             }
 
-            // 3. Run the student query
+            // 3. Run the student query with strict security check
+            const trimmedSql = sql.trim().toUpperCase();
+            const dangerousKeywords = ['DROP', 'TRUNCATE', 'ALTER', 'DELETE', 'UPDATE', 'INSERT', 'CREATE', 'GRANT', 'REVOKE', 'REPLACE'];
+
+            const isStaff = req.user && (req.user.role === 'admin' || req.user.role === 'invigilator');
+
+            if (!isStaff) {
+                // Students can ONLY run SELECT statements
+                if (!trimmedSql.startsWith('SELECT')) {
+                    throw new Error('Security Violation: Only SELECT statements are allowed for students.');
+                }
+
+                // Block multi-statements and dangerous keywords
+                if (sql.includes(';') || dangerousKeywords.some(kw => trimmedSql.includes(kw))) {
+                    throw new Error('Security Violation: Dangerous SQL command detected.');
+                }
+
+                // Block access to sensitive tables in user query
+                const sensitiveTables = ['users', 'exams', 'exam_attempts', 'student_answers', 'exam_results', 'exam_questions', 'sessions', 'categories'];
+                if (sensitiveTables.some(table => trimmedSql.includes(table))) {
+                    throw new Error('Security Violation: Access to system tables is restricted.');
+                }
+            }
+
             const [results] = await sequelize.query(sql, { transaction });
 
             // 4. Rollback to keep database clean (Temporary tables in InnoDB roll back!)

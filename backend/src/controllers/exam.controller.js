@@ -123,11 +123,16 @@ const getExamById = async (req, res, next) => {
     try {
         const { id } = req.params;
 
+        const isStaff = req.user && (req.user.role === 'admin' || req.user.role === 'invigilator');
+
         const exam = await Exam.findByPk(id, {
             include: [
                 {
                     model: Question,
                     as: 'questions',
+                    attributes: isStaff
+                        ? undefined
+                        : ['id', 'question_text', 'image_url', 'question_type', 'database_schema'],
                     through: {
                         attributes: ['question_order', 'question_weightage'],
                     },
@@ -135,7 +140,9 @@ const getExamById = async (req, res, next) => {
                         {
                             model: MCQOption,
                             as: 'options',
-                            attributes: ['id', 'option_text', 'display_order'],
+                            attributes: isStaff
+                                ? ['id', 'option_text', 'is_correct', 'display_order']
+                                : ['id', 'option_text', 'display_order'],
                         },
                     ],
                 },
@@ -355,17 +362,24 @@ const getExamQuestions = async (req, res, next) => {
             return ApiResponse.notFound(res, 'Exam not found');
         }
 
+        const isStaff = req.user && (req.user.role === 'admin' || req.user.role === 'invigilator');
+
         const examQuestions = await ExamQuestion.findAll({
             where: { exam_id: id },
             include: [
                 {
                     model: Question,
                     as: 'question',
+                    attributes: isStaff
+                        ? undefined
+                        : ['id', 'question_text', 'image_url', 'question_type', 'database_schema'],
                     include: [
                         {
                             model: MCQOption,
                             as: 'options',
-                            attributes: ['id', 'option_text', 'display_order'],
+                            attributes: isStaff
+                                ? ['id', 'option_text', 'is_correct', 'display_order']
+                                : ['id', 'option_text', 'display_order'],
                         },
                     ],
                 },
