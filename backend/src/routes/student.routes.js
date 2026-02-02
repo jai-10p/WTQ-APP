@@ -81,9 +81,14 @@ router.get(
 );
 
 /**
- * @route   GET /api/v1/student/results
- * @desc    Get all exam results for student
+ * @route   POST /api/v1/student/attempts/:attemptId/questions/:questionId/run-tests
+ * @desc    Run all test cases for a coding question
  */
+router.post(
+    '/attempts/:attemptId/questions/:questionId/run-tests',
+    studentController.runQuestionTests
+);
+
 router.get('/results', studentController.getMyResults);
 
 module.exports = router;

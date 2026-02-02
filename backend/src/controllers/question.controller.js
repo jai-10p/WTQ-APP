@@ -594,7 +594,32 @@ const runSQL = async (req, res, next) => {
         transaction = await sequelize.transaction();
 
         try {
-            // 2. Set up the schema if provided
+            // Security Check for student SQL
+            const sqlNoComments = sql.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+            const cleanSql = sqlNoComments.trim();
+
+            // Allow a single semicolon at the end, but block multiple statements
+            const hasMultipleStatements = cleanSql.replace(/;$/, '').includes(';');
+
+            const dangerousKeywords = ['DROP', 'TRUNCATE', 'ALTER', 'DELETE', 'UPDATE', 'INSERT', 'CREATE', 'GRANT', 'REVOKE', 'REPLACE', 'RENAME'];
+            const dangerousRegex = new RegExp(`\\b(${dangerousKeywords.join('|')})\\b`, 'i');
+
+            if (hasMultipleStatements || dangerousRegex.test(cleanSql)) {
+                return ApiResponse.error(res, 'Dangerous SQL detected. Only single SELECT statements are allowed.', 400);
+            }
+
+            // Block access to sensitive tables
+            const sensitiveTables = ['users', 'exams', 'exam_attempts', 'student_answers', 'exam_results', 'exam_questions', 'sessions', 'categories'];
+            const sensitiveRegex = new RegExp(`\\b(${sensitiveTables.join('|')})\\b`, 'i');
+
+            if (sensitiveRegex.test(cleanSql)) {
+                return ApiResponse.error(res, 'Access to system tables is restricted.', 403);
+            }
+
+            // 2. Disable ONLY_FULL_GROUP_BY for this session to be more student-friendly
+            await sequelize.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));", { transaction });
+
+            // 3. Set up the schema if provided
             if (database_schema) {
                 // SANDBOX TRICK: Convert all CREATE TABLE to CREATE TEMPORARY TABLE
                 // This prevents "Implicit Commits" and ensures isolation between students/runs.

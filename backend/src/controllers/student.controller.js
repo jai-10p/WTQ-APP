@@ -751,55 +751,108 @@ const getMyResults = async (req, res, next) => {
     }
 };
 
+/**
+ * Run all test cases for a specific coding question
+ * @route POST /api/v1/student/attempts/:attemptId/questions/:questionId/run-tests
+ */
+const runQuestionTests = async (req, res, next) => {
+    try {
+        const { attemptId, questionId } = req.params;
+        const { code, language } = req.body;
+        const studentId = req.user.id;
+
+        if (!code || !language) {
+            return ApiResponse.error(res, 'Code and language are required', 400);
+        }
+
+        const attempt = await ExamAttempt.findOne({
+            where: { id: attemptId, student_id: studentId, status: 'in_progress' }
+        });
+
+        if (!attempt) return ApiResponse.notFound(res, 'Active exam attempt not found');
+
+        const examQuestion = await ExamQuestion.findOne({
+            where: { id: questionId, exam_id: attempt.exam_id },
+            include: [{ model: Question, as: 'question' }]
+        });
+
+        if (!examQuestion || !examQuestion.question) {
+            return ApiResponse.notFound(res, 'Question not found in this exam');
+        }
+
+        const question = examQuestion.question;
+        let testCases = [];
+        try {
+            if (question.reference_solution) {
+                const config = JSON.parse(question.reference_solution);
+                testCases = config.test_cases || [];
+            }
+        } catch (e) {
+            console.error('Error parsing test cases:', e);
+        }
+
+        if (testCases.length === 0) {
+            return ApiResponse.error(res, 'No test cases configured for this question', 400);
+        }
+
+        const result = await codeExecutor.runTestCases(language, code, testCases);
+        return ApiResponse.success(res, result);
+    } catch (error) {
+        next(error);
+    }
+};
+
 // Helper: Evaluate SQL Answer
 const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
     try {
         const transaction = await sequelize.transaction();
         try {
+            // Disable ONLY_FULL_GROUP_BY for grading execution
+            await sequelize.query("SET SESSION sql_mode=(SELECT REPLACE(@@sql_mode,'ONLY_FULL_GROUP_BY',''));", { transaction });
+
             if (schema) {
-                // SANDBOX TRICK: Convert all CREATE TABLE to CREATE TEMPORARY TABLE
                 const sandboxSchema = schema.replace(/\bCREATE\s+(?:TEMPORARY\s+)?TABLE\s+(?:IF\s+NOT\s+EXISTS\s+)?([`"']?)([a-zA-Z0-9_]+)\1/gi, 'DROP TEMPORARY TABLE IF EXISTS $1$2$1; CREATE TEMPORARY TABLE $1$2$1');
                 const statements = sandboxSchema.split(';').filter(s => s.trim());
                 for (const s of statements) await sequelize.query(s, { transaction });
             }
 
+            // Security Check for student SQL during grading
+            const sqlNoComments = studentSQL.replace(/--.*$/gm, '').replace(/\/\*[\s\S]*?\*\//g, '');
+            const cleanSql = sqlNoComments.trim();
+
+            // Allow a single semicolon at the end, but block multiple statements
+            const hasMultipleStatements = cleanSql.replace(/;$/, '').includes(';');
+
+            const dangerousKeywords = ['DROP', 'TRUNCATE', 'ALTER', 'DELETE', 'UPDATE', 'INSERT', 'CREATE', 'GRANT', 'REVOKE', 'REPLACE', 'RENAME'];
+            const dangerousRegex = new RegExp(`\\b(${dangerousKeywords.join('|')})\\b`, 'i');
+
+            if (hasMultipleStatements || dangerousRegex.test(cleanSql)) return false;
+
+            // Block access to sensitive tables
+            const sensitiveTables = ['users', 'exams', 'exam_attempts', 'student_answers', 'exam_results', 'exam_questions', 'sessions', 'categories'];
+            const sensitiveRegex = new RegExp(`\\b(${sensitiveTables.join('|')})\\b`, 'i');
+
+            if (sensitiveRegex.test(cleanSql)) return false;
+
             const [studentResults] = await sequelize.query(studentSQL, { transaction });
             const [referenceResults] = await sequelize.query(referenceSQL, { transaction });
-
             await transaction.rollback();
 
-            // Canonicalize results for fair comparison
             const canonicalize = (results) => {
                 if (!Array.isArray(results)) return results;
-                if (results.length === 0) return [];
-
-                // 1. Normalize all rows: lowercase keys and sort columns by key name
-                const normalized = results.map(row => {
+                return results.map(row => {
                     const sortedRow = {};
                     Object.keys(row).sort().forEach(key => {
-                        // Store value as string for consistent comparison (handles decimals/floats)
                         let val = row[key];
                         if (typeof val === 'number') val = val.toString();
                         sortedRow[key.toLowerCase()] = val;
                     });
                     return sortedRow;
-                });
-
-                // 2. Sort the rows themselves to ignore row order (unless specified)
-                // We stringify for comparison sorting
-                return normalized.sort((a, b) => {
-                    const strA = JSON.stringify(a);
-                    const strB = JSON.stringify(b);
-                    return strA.localeCompare(strB);
-                });
+                }).sort((a, b) => JSON.stringify(a).localeCompare(JSON.stringify(b)));
             };
 
-            const studentCanonical = canonicalize(studentResults);
-            const referenceCanonical = canonicalize(referenceResults);
-
-            return JSON.stringify(studentCanonical) === JSON.stringify(referenceCanonical);
+            return JSON.stringify(canonicalize(studentResults)) === JSON.stringify(canonicalize(referenceResults));
         } catch (e) {
-            console.error('SQL Grading Error:', e);
             if (transaction) await transaction.rollback();
             return false;
         }
@@ -808,18 +861,14 @@ const evaluateSQLAnswer = async (studentSQL, referenceSQL, schema) => {
     }
 };
 
-
 const getExampleTestCase = (solution) => {
     try {
         if (!solution) return null;
         const parsed = JSON.parse(solution);
-        if (parsed.test_cases && parsed.test_cases.length > 0) {
-            return parsed.test_cases[0];
-        }
+        return parsed.test_cases && parsed.test_cases.length > 0 ? parsed.test_cases[0] : null;
     } catch (e) {
-        // console.error('Error parsing solution for example test case:', e);
+        return null;
     }
-    return null;
 };
 
 module.exports = {
@@ -830,4 +879,5 @@ module.exports = {
     submitExam,
     getExamResult,
     getMyResults,
+    runQuestionTests,
 };
