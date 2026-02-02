@@ -289,11 +289,13 @@ export default function ExamQuestionsAssignmentPage() {
                                                                     <div className="flex items-center gap-2">
                                                                         <span className="text-xs font-bold text-gray-400 uppercase tracking-wider">Weightage:</span>
                                                                         <input
-                                                                            type="number"
-                                                                            min="1"
+                                                                            type="text"
                                                                             className="w-16 px-2 py-1 border border-gray-200 rounded text-sm focus:ring-2 focus:ring-blue-500 outline-none font-bold"
                                                                             value={Math.round(aq.question_weightage)}
-                                                                            onChange={(e) => handleUpdateWeightage(aq.question_id, parseInt(e.target.value) || 0)}
+                                                                            onChange={(e) => {
+                                                                                const val = e.target.value.replace(/[^0-9]/g, '');
+                                                                                handleUpdateWeightage(aq.question_id, parseInt(val) || 0);
+                                                                            }}
                                                                         />
                                                                     </div>
                                                                     <div className="flex items-center gap-2">

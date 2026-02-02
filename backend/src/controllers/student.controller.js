@@ -153,7 +153,7 @@ const startExam = async (req, res, next) => {
             where: {
                 exam_id: id,
                 student_id: studentId,
-                status: { [Op.in]: ['submitted', 'abandoned', 'timeout'] },
+                status: { [Op.in]: ['submitted', 'abandoned', 'timeout', 'disqualified'] },
             },
         });
 
@@ -212,6 +212,10 @@ const getAttemptQuestions = async (req, res, next) => {
 
         if (!attempt) {
             return ApiResponse.notFound(res, 'Exam attempt not found');
+        }
+
+        if (attempt.status !== 'in_progress') {
+            return ApiResponse.error(res, 'This exam attempt is no longer active and cannot be resumed.', 403);
         }
 
         if (!attempt.exam) {
@@ -288,7 +292,7 @@ const submitAnswer = async (req, res, next) => {
         });
 
         if (!attempt) return ApiResponse.notFound(res, 'Attempt not found');
-        if (attempt.status !== 'in_progress') return ApiResponse.error(res, 'Exam is already submitted or closed', 400);
+        if (attempt.status !== 'in_progress') return ApiResponse.error(res, 'Exam is already submitted, disqualified, or closed', 403);
 
         // 2. Check time validity
         if (isTimeExpired(attempt.started_at, attempt.exam.duration_minutes)) {

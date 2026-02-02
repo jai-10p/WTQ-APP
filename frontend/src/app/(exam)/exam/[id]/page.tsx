@@ -32,7 +32,11 @@ export default function ExamPage() {
     const [warningCount, setWarningCount] = useState(0);
     const [showWarningModal, setShowWarningModal] = useState(false);
     const [showSubmitModal, setShowSubmitModal] = useState(false);
+    const [showBackModal, setShowBackModal] = useState(false);
+    const [showLeaveModal, setShowLeaveModal] = useState(false);
     const [disqualified, setDisqualified] = useState(false);
+    const isModalOpenRef = useRef(false);
+    const isNativeDialogActive = useRef(false);
     const lastViolationTime = useRef<number>(0);
     const isAutoSubmitting = useRef<boolean>(false);
 
@@ -41,6 +45,11 @@ export default function ExamPage() {
             fetchExamData();
         }
     }, [attemptId]);
+
+    // Sync modal state to ref for anti-cheating logic
+    useEffect(() => {
+        isModalOpenRef.current = showWarningModal || showSubmitModal || showBackModal || showLeaveModal || submitting;
+    }, [showWarningModal, showSubmitModal, showBackModal, showLeaveModal, submitting]);
 
     // Anti-Cheating Effects
     useEffect(() => {
@@ -54,17 +63,28 @@ export default function ExamPage() {
 
         // 2. Detect Tab Switching / Minimizing
         const handleVisibilityChange = () => {
+            // Ignore if it's due to a browser dialog (e.g., Leave site? prompt)
+            if (isNativeDialogActive.current) return;
+
             if (document.hidden) {
                 handleViolation();
             }
         };
 
         const handleBlur = () => {
+            // Ignore focus loss if it's due to a browser dialog (e.g., Leave site? prompt)
+            if (isNativeDialogActive.current) return;
             handleViolation();
         };
 
+        const handleFocus = () => {
+            // Focus returned - reset native dialog flag
+            isNativeDialogActive.current = false;
+        };
+
         const handleViolation = () => {
-            if (disqualified || showWarningModal || showSubmitModal || submitting) return;
+            // CRITICAL: Don't count violations if a system modal is open
+            if (disqualified || isModalOpenRef.current || showSuccessOverlay || loading) return;
 
             // Prevent multiple triggers (blur + visibilitychange often happen together)
             const now = Date.now();
@@ -99,15 +119,55 @@ export default function ExamPage() {
             handleDisqualification();
         }
 
+        // 3. Prevent Back Navigation
+        const preventBack = (e: PopStateEvent) => {
+            // Push the current state back to keep the user on the page
+            window.history.pushState(null, '', window.location.href);
+            setShowBackModal(true);
+        };
+
+        // Initialize state to intercept first back button
+        window.history.pushState(null, '', window.location.href);
+
+        // 4. Prevent Tab/Window Closing/Refresh
+        const preventClose = (e: BeforeUnloadEvent) => {
+            isNativeDialogActive.current = true;
+            // Clear flag after a longer delay (5s) in case they stay.
+            // If they click 'Stay', window will regain focus and handleFocus will also clear this.
+            setTimeout(() => {
+                isNativeDialogActive.current = false;
+            }, 5000);
+
+            e.preventDefault();
+            e.returnValue = ''; // Trigger browser native prompt
+            return '';
+        };
+
+        // 5. Auto-submit if tab is actually closed
+        const handleUnload = () => {
+            // Using navigator.sendBeacon for reliable submission on tab close
+            const url = `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:5000/api'}/student/attempts/${attemptId}/submit`;
+            const data = JSON.stringify({ status: 'left_during_exam' });
+            navigator.sendBeacon(url, data);
+        };
+
         // Add Listeners
         document.addEventListener('copy', preventCopy);
         document.addEventListener('visibilitychange', handleVisibilityChange);
         window.addEventListener('blur', handleBlur);
+        window.addEventListener('focus', handleFocus);
+        window.addEventListener('popstate', preventBack);
+        window.addEventListener('beforeunload', preventClose);
+        window.addEventListener('unload', handleUnload);
 
         return () => {
             document.removeEventListener('copy', preventCopy);
             document.removeEventListener('visibilitychange', handleVisibilityChange);
             window.removeEventListener('blur', handleBlur);
+            window.removeEventListener('focus', handleFocus);
+            window.removeEventListener('popstate', preventBack);
+            window.removeEventListener('beforeunload', preventClose);
+            window.removeEventListener('unload', handleUnload);
         };
     }, [isStudent, disqualified, showSuccessOverlay, loading, attemptId, warningCount]);
 
@@ -301,6 +361,27 @@ export default function ExamPage() {
                 </div>
             )}
 
+            {/* Back Button Restriction Modal */}
+            {showBackModal && (
+                <div className="fixed inset-0 z-[112] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4 animate-in fade-in duration-300">
+                    <div className="bg-white rounded-2xl p-8 max-w-sm w-full text-center shadow-2xl animate-in zoom-in duration-300">
+                        <div className="w-16 h-16 bg-red-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                            <AlertTriangle className="w-8 h-8 text-red-600" />
+                        </div>
+                        <h2 className="text-xl font-bold text-gray-900 mb-2">BACK NOT ALLOWED!</h2>
+                        <p className="text-sm text-gray-500 mb-8">
+                            Going back is disabled during the exam. Please use the navigation palette to move between questions.
+                        </p>
+                        <button
+                            onClick={() => setShowBackModal(false)}
+                            className="w-full py-3 bg-red-600 hover:bg-red-700 text-white rounded-xl font-bold transition-all active:scale-95"
+                        >
+                            Got it
+                        </button>
+                    </div>
+                </div>
+            )}
+
             {/* Disqualification Overlay */}
             {disqualified && (
                 <div className="fixed inset-0 z-[120] flex items-center justify-center bg-red-600/95 backdrop-blur-xl animate-in fade-in duration-500">
@@ -313,7 +394,7 @@ export default function ExamPage() {
                             Your exam has been automatically submitted. You were caught attempting to cheat by switching tabs or minimizing the browser multiple times.
                         </p>
                         <button
-                            onClick={() => router.push('/dashboard/student/exams')}
+                            onClick={() => window.location.href = '/dashboard/student/exams'}
                             className="bg-white text-red-600 px-10 py-4 rounded-full font-black uppercase tracking-widest hover:bg-red-50 shadow-2xl transition-all active:scale-95"
                         >
                             Return to Dashboard
@@ -329,7 +410,7 @@ export default function ExamPage() {
                         <div className="w-20 h-20 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-6">
                             <CheckCircle className="w-10 h-10 text-blue-600" />
                         </div>
-                        <h2 className="text-3xl font-black text-gray-900 mb-2 tracking-tight">READY TO SUBMIT?</h2>
+                        <h2 className="text-3xl font-black text-gray-900 mb-2 tracking-tight uppercase">READY TO SUBMIT?</h2>
                         <p className="text-sm text-gray-500 mb-8 font-medium">
                             Please ensure you have reviewed all your answers. This action cannot be undone once submitted.
                         </p>
@@ -359,6 +440,7 @@ export default function ExamPage() {
                     </div>
                 </div>
             )}
+
 
             <header className="bg-white border-b border-gray-200 px-8 py-4 flex items-center justify-between shadow-sm z-10">
                 <div className="flex items-center gap-4">
